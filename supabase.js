@@ -9,8 +9,23 @@ class SupabaseClient {
     this.headers = {
       'Content-Type': 'application/json',
       'apikey': key,
-      'Authorization': `Bearer ${key}`
+      'Authorization': `Bearer ${key}`,
+      'Prefer': 'return=minimal' // This tells Supabase to return minimal response for writes
     };
+  }
+
+  // Helper method to safely parse response
+  async parseResponse(response, defaultValue = null) {
+    try {
+      const text = await response.text();
+      if (!text || text.trim() === '') {
+        return defaultValue;
+      }
+      return JSON.parse(text);
+    } catch (error) {
+      console.warn('Failed to parse response as JSON:', text);
+      return defaultValue;
+    }
   }
 
   // Generate a simple user ID based on Chrome extension ID and installation
@@ -41,10 +56,13 @@ class SupabaseClient {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
-      return await response.json();
+      // For inserts with 'return=minimal', we expect empty response on success
+      const result = await this.parseResponse(response, { success: true, data: data });
+      return result;
     } catch (error) {
       console.error('Supabase insert error:', error);
       throw error;
@@ -79,10 +97,12 @@ class SupabaseClient {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
-      return await response.json();
+      const result = await this.parseResponse(response, []);
+      return result;
     } catch (error) {
       console.error('Supabase select error:', error);
       throw error;
@@ -112,10 +132,12 @@ class SupabaseClient {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
-      return await response.json();
+      const result = await this.parseResponse(response, { success: true, data: data });
+      return result;
     } catch (error) {
       console.error('Supabase update error:', error);
       throw error;
@@ -144,10 +166,12 @@ class SupabaseClient {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
-      return await response.json();
+      const result = await this.parseResponse(response, { success: true });
+      return result;
     } catch (error) {
       console.error('Supabase delete error:', error);
       throw error;

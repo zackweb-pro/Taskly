@@ -20,10 +20,11 @@ const SOURCE_FILES = [
   'supabase.js',
   'background.js',
   'content.js',
-  'styles.css',
-  'icon16.png',
-  'icon48.png',
-  'icon128.png'
+  'content.css',
+  'icons/icon16.png',
+  'icons/icon32.png',
+  'icons/icon48.png',
+  'icons/icon128.png'
 ];
 
 function createBuildDirectory() {
@@ -65,6 +66,13 @@ function copyFile(fileName) {
   if (!fs.existsSync(sourcePath)) {
     console.log(`⚠️  File not found, skipping: ${fileName}`);
     return;
+  }
+
+  // Create subdirectories if they don't exist
+  const destDir = path.dirname(destPath);
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+    console.log(`✓ Created directory: ${path.relative(__dirname, destDir)}`);
   }
 
   try {
