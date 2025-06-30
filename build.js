@@ -60,6 +60,7 @@ function replaceEnvironmentVariables(content) {
 }
 
 function copyFile(fileName) {
+  // Set up source and destination paths
   const sourcePath = path.join(__dirname, fileName);
   const destPath = path.join(__dirname, BUILD_DIR, fileName);
 
@@ -76,6 +77,14 @@ function copyFile(fileName) {
   }
 
   try {
+    // For binary files (images), copy directly
+    if (fileName.includes('.png') || fileName.includes('.jpg') || fileName.includes('.ico')) {
+      fs.copyFileSync(sourcePath, destPath);
+      console.log(`✓ Copied (binary): ${fileName}`);
+      return;
+    }
+
+    // For text files, read as string and process if needed
     let content = fs.readFileSync(sourcePath, 'utf8');
     
     // Only process config.js for environment variable replacement
@@ -87,9 +96,13 @@ function copyFile(fileName) {
     fs.writeFileSync(destPath, content);
     console.log(`✓ Copied: ${fileName}`);
   } catch (error) {
-    // If file is binary (like images), copy it directly
-    fs.copyFileSync(sourcePath, destPath);
-    console.log(`✓ Copied (binary): ${fileName}`);
+    // Fallback to binary copy if text reading fails
+    try {
+      fs.copyFileSync(sourcePath, destPath);
+      console.log(`✓ Copied (binary fallback): ${fileName}`);
+    } catch (copyError) {
+      console.error(`❌ Failed to copy ${fileName}:`, copyError.message);
+    }
   }
 }
 
