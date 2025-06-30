@@ -1,0 +1,34 @@
+{
+  "name": "taskly-chrome-extension",
+  "version": "1.0.0",
+  "description": "A productivity Chrome extension for task management with cloud storage",
+  "scripts": {
+    "build": "node build.js",
+    "build:clean": "node build.js --clean",
+    "dev": "echo \"Development mode: Load extension from source directory\"",
+    "package": "npm run build && cd dist && powershell Compress-Archive -Path * -DestinationPath ../taskly-extension.zip -Force",
+    "validate": "node -e \"require('dotenv').config(); console.log('Environment validation:', process.env.SUPABASE_URL ? '✓ SUPABASE_URL' : '❌ SUPABASE_URL missing', process.env.SUPABASE_ANON_KEY ? '✓ SUPABASE_ANON_KEY' : '❌ SUPABASE_ANON_KEY missing');\""
+  },
+  "keywords": [
+    "chrome-extension",
+    "productivity",
+    "task-management",
+    "supabase"
+  ],
+  "author": "Zackweb",
+  "license": "MIT",
+  "devDependencies": {
+    "dotenv": "^16.3.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/taskly-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/taskly-extension/issues"
+  },
+  "homepage": "https://github.com/yourusername/taskly-extension#readme"
+}

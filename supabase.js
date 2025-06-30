@@ -1,6 +1,5 @@
 // Supabase client configuration
-const SUPABASE_URL = 'https://mksxrwldbhknicbbmssz.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rc3hyd2xkYmhrbmljYmJtc3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzMjI0NDEsImV4cCI6MjA2Njg5ODQ0MX0.FEMg-mHhL1rdARHLsw7K099RxCn0sUwNAfOelCe7DlI';
+// Credentials are now managed through config.js
 
 // Simple Supabase client implementation for Chrome extension
 class SupabaseClient {
@@ -157,9 +156,27 @@ class SupabaseClient {
 }
 
 // Create and export the Supabase client instance
-const supabase = new SupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// This will be initialized after config is loaded
+let supabase = null;
+
+// Initialize Supabase client with config
+function initializeSupabase() {
+  if (typeof config !== 'undefined') {
+    const { supabaseUrl, supabaseKey } = config.getConfig();
+    supabase = new SupabaseClient(supabaseUrl, supabaseKey);
+  } else {
+    console.error('Config not loaded. Make sure config.js is included before supabase.js');
+  }
+  return supabase;
+}
+
+// Auto-initialize if config is available
+if (typeof config !== 'undefined') {
+  supabase = initializeSupabase();
+}
 
 // Make it available globally
 if (typeof window !== 'undefined') {
   window.supabase = supabase;
+  window.initializeSupabase = initializeSupabase;
 }

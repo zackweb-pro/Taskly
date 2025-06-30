@@ -1,0 +1,37 @@
+# Environment variables
+.env
+
+# Build outputs
+dist/
+*.zip
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Chrome extension package
+taskly-extension.zip
+*.crx
+*.pem
+
+# Backup files
+*.bak
+*.backup
