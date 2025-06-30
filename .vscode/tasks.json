@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Load Extension in Chrome",
+			"type": "shell",
+			"command": "echo 'Extension files ready. Load the extension in Chrome by:'",
+			"args": [],
+			"group": "build",
+			"isBackground": false
+		}
+	]
+}

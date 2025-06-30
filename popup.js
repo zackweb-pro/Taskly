@@ -28,6 +28,14 @@ class TasklyPopup {
     const clearBtn = document.getElementById('clearCompletedBtn');
     clearBtn.addEventListener('click', () => this.clearCompletedTasks());
 
+    // Stats toggle
+    const statsToggleBtn = document.getElementById('statsToggleBtn');
+    statsToggleBtn.addEventListener('click', () => this.toggleStatsView());
+
+    // Year selector
+    const yearSelector = document.getElementById('yearSelector');
+    yearSelector.addEventListener('change', () => this.onYearChange());
+
     // Focus on input when popup opens
     taskInput.focus();
   }
@@ -62,7 +70,13 @@ class TasklyPopup {
 
   async saveTasks() {
     try {
+      // Save current day tasks
       await chrome.storage.local.set({ tasklyTasks: this.tasks });
+      
+      // Also save to historical data with date key
+      const today = new Date().toISOString().split('T')[0];
+      const historicalKey = `tasklyTasks_${today}`;
+      await chrome.storage.local.set({ [historicalKey]: this.tasks });
     } catch (error) {
       console.error('Error saving tasks:', error);
     }
@@ -169,6 +183,358 @@ class TasklyPopup {
       }
     });
   }
+
+  // Stats functionality
+  toggleStatsView() {
+    const mainView = document.getElementById('mainView');
+    const statsView = document.getElementById('statsView');
+    const statsToggleBtn = document.getElementById('statsToggleBtn');
+    
+    if (statsView.classList.contains('active')) {
+      // Switch to main view
+      statsView.classList.remove('active');
+      mainView.classList.remove('hidden');
+      statsToggleBtn.innerHTML = '📊 Stats';
+    } else {
+      // Switch to stats view
+      mainView.classList.add('hidden');
+      statsView.classList.add('active');
+      statsView.classList.add('view-transition');
+      statsToggleBtn.innerHTML = '📝 Tasks';
+      this.generateStatsView();
+    }
+  }
+
+  async generateStatsView() {
+    try {
+      // Get all historical data
+      const result = await chrome.storage.local.get(null);
+      const allData = {};
+      
+      // Parse all stored data to extract daily task completion
+      Object.keys(result).forEach(key => {
+        if (key.startsWith('tasklyTasks_')) {
+          const date = key.replace('tasklyTasks_', '');
+          allData[date] = result[key] || [];
+        } else if (key === 'tasklyTasks') {
+          // Current day tasks
+          const today = new Date().toISOString().split('T')[0];
+          allData[today] = result[key] || [];
+        }
+      });
+
+      this.populateYearSelector(allData);
+      this.updateStatsOverview(allData);
+      this.generateContributionHeatmap(allData);
+    } catch (error) {
+      console.error('Error generating stats:', error);
+    }
+  }
+
+  populateYearSelector(allData) {
+    const yearSelector = document.getElementById('yearSelector');
+    const years = new Set();
+    
+    // Get all years from data
+    Object.keys(allData).forEach(dateStr => {
+      const year = new Date(dateStr).getFullYear();
+      if (!isNaN(year)) {
+        years.add(year);
+      }
+    });
+    
+    // Add current year if not present
+    const currentYear = new Date().getFullYear();
+    years.add(currentYear);
+    
+    // Sort years in descending order
+    const sortedYears = Array.from(years).sort((a, b) => b - a);
+    
+    // Clear and populate selector
+    yearSelector.innerHTML = '';
+    
+    // Add "Last 365 days" option
+    const lastYearOption = document.createElement('option');
+    lastYearOption.value = 'last365';
+    lastYearOption.textContent = 'Last 365 days';
+    lastYearOption.selected = true;
+    yearSelector.appendChild(lastYearOption);
+    
+    // Add year options
+    sortedYears.forEach(year => {
+      const option = document.createElement('option');
+      option.value = year;
+      option.textContent = year;
+      yearSelector.appendChild(option);
+    });
+  }
+
+  onYearChange() {
+    this.generateStatsView();
+  }
+
+  updateStatsOverview(allData) {
+    const yearSelector = document.getElementById('yearSelector');
+    const selectedYear = yearSelector.value;
+    
+    let filteredData = allData;
+    
+    // Filter data based on selected year
+    if (selectedYear !== 'last365') {
+      const year = parseInt(selectedYear);
+      filteredData = {};
+      Object.keys(allData).forEach(dateStr => {
+        const date = new Date(dateStr);
+        if (date.getFullYear() === year) {
+          filteredData[dateStr] = allData[dateStr];
+        }
+      });
+    } else {
+      // Filter to last 365 days
+      const today = new Date();
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(today.getFullYear() - 1);
+      oneYearAgo.setDate(today.getDate() + 1);
+      
+      filteredData = {};
+      Object.keys(allData).forEach(dateStr => {
+        const date = new Date(dateStr);
+        if (date >= oneYearAgo && date <= today) {
+          filteredData[dateStr] = allData[dateStr];
+        }
+      });
+    }
+
+    let totalTasks = 0;
+    let completedTasks = 0;
+    
+    Object.values(filteredData).forEach(dayTasks => {
+      totalTasks += dayTasks.length;
+      completedTasks += dayTasks.filter(task => task.completed).length;
+    });
+
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    document.getElementById('totalTasks').textContent = totalTasks;
+    document.getElementById('completedTasks').textContent = completedTasks;
+    document.getElementById('completionRate').textContent = completionRate + '%';
+
+    // Calculate streak and best day using filtered data
+    const { currentStreak, bestDay } = this.calculateStreakAndBestDay(filteredData);
+    document.getElementById('currentStreak').textContent = `${currentStreak} day streak`;
+    document.getElementById('bestDay').textContent = `${bestDay} best day`;
+  }
+
+  calculateStreakAndBestDay(allData) {
+    const dates = Object.keys(allData).sort().reverse();
+    let currentStreak = 0;
+    let bestDay = 0;
+    
+    // Calculate current streak
+    const today = new Date().toISOString().split('T')[0];
+    let checkDate = new Date();
+    
+    while (true) {
+      const dateStr = checkDate.toISOString().split('T')[0];
+      const dayTasks = allData[dateStr] || [];
+      const completedCount = dayTasks.filter(task => task.completed).length;
+      
+      if (completedCount > 0) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+      
+      // Don't check beyond 365 days
+      if (currentStreak > 365) break;
+    }
+
+    // Calculate best day
+    Object.values(allData).forEach(dayTasks => {
+      const completed = dayTasks.filter(task => task.completed).length;
+      if (completed > bestDay) bestDay = completed;
+    });
+
+    return { currentStreak, bestDay };
+  }
+
+generateContributionHeatmap(allData) {
+  const grid = document.getElementById('contributionGrid');
+  const monthLabels = document.getElementById('monthLabels');
+  const tooltip = document.getElementById('contributionTooltip');
+  const yearSelector = document.getElementById('yearSelector');
+  const heatmapPeriod = document.getElementById('heatmapPeriod');
+  
+  // Clear existing content
+  grid.innerHTML = '';
+  monthLabels.innerHTML = '';
+  
+  const selectedYear = yearSelector.value;
+  let startDate, endDate;
+  
+  if (selectedYear === 'last365') {
+    // Last 365 days from today
+    endDate = new Date();
+    startDate = new Date();
+    startDate.setDate(endDate.getDate() - 364); // 365 days including today
+    heatmapPeriod.textContent = 'Last 365 days';
+  } else {
+    // Specific year - show full calendar year
+    const year = parseInt(selectedYear);
+    startDate = new Date(year, 0, 1); // January 1st
+    endDate = new Date(year, 11, 31); // December 31st
+    heatmapPeriod.textContent = `Year ${year}`;
+  }
+  
+  // Find the Sunday before or on the start date (GitHub style)
+  const gridStartDate = new Date(startDate);
+  const startDayOfWeek = gridStartDate.getDay();
+  gridStartDate.setDate(gridStartDate.getDate() - startDayOfWeek);
+  
+  // Find the Saturday after or on the end date
+  const gridEndDate = new Date(endDate);
+  const endDayOfWeek = gridEndDate.getDay();
+  gridEndDate.setDate(gridEndDate.getDate() + (6 - endDayOfWeek));
+  
+  // Calculate total weeks
+  const totalDays = Math.ceil((gridEndDate - gridStartDate) / (1000 * 60 * 60 * 24)) + 1;
+  const totalWeeks = Math.ceil(totalDays / 7);
+  
+  // Set up the grid
+  grid.style.gridTemplateColumns = `repeat(${totalWeeks}, 1fr)`;
+  grid.style.gridTemplateRows = 'repeat(7, 1fr)';
+  monthLabels.style.gridTemplateColumns = `repeat(${totalWeeks}, 1fr)`;
+  
+  // Generate month labels
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  // Track month changes and position labels correctly
+  let lastMonth = -1;
+  const monthPositions = [];
+  
+  for (let week = 0; week < totalWeeks; week++) {
+    const weekStartDate = new Date(gridStartDate);
+    weekStartDate.setDate(gridStartDate.getDate() + (week * 7));
+    
+    // Only consider weeks that intersect with our actual date range
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 6);
+    
+    if (weekEndDate >= startDate && weekStartDate <= endDate) {
+      // Find the first day of this week that's in our range
+      let representativeDate = new Date(Math.max(weekStartDate, startDate));
+      const currentMonth = representativeDate.getMonth();
+      
+      if (currentMonth !== lastMonth && week >= 2) { // Don't show month for first 2 weeks if they're partial
+        monthPositions.push({ week, month: currentMonth });
+        lastMonth = currentMonth;
+      }
+    }
+  }
+  
+  // Create month label elements
+  for (let week = 0; week < totalWeeks; week++) {
+    const monthDiv = document.createElement('div');
+    monthDiv.style.gridColumn = week + 1;
+    monthDiv.className = 'month-label';
+    
+    // Check if this week should have a month label
+    const monthPosition = monthPositions.find(pos => pos.week === week);
+    if (monthPosition) {
+      monthDiv.textContent = months[monthPosition.month];
+      monthDiv.style.fontWeight = '600';
+      monthDiv.style.fontSize = '12px';
+      monthDiv.style.color = '#666';
+    }
+    
+    monthLabels.appendChild(monthDiv);
+  }
+  
+  // Generate the contribution grid
+  // Create array to hold all days
+  const allDays = [];
+  
+  for (let week = 0; week < totalWeeks; week++) {
+    for (let day = 0; day < 7; day++) {
+      const currentDate = new Date(gridStartDate);
+      currentDate.setDate(gridStartDate.getDate() + (week * 7) + day);
+      
+      const dayElement = document.createElement('div');
+      dayElement.className = 'contribution-day';
+      
+      // Check if this day is within our actual date range
+      if (currentDate >= startDate && currentDate <= endDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const dayTasks = allData[dateStr] || [];
+        const completedCount = dayTasks.filter(task => task.completed).length;
+        
+        // Determine contribution level (0-4 for better visual distinction)
+        let level = 0;
+        if (completedCount >= 1) level = 1;
+        if (completedCount >= 3) level = 2;
+        if (completedCount >= 5) level = 3;
+        if (completedCount >= 8) level = 4;
+        
+        dayElement.setAttribute('data-level', level);
+        dayElement.setAttribute('data-date', dateStr);
+        dayElement.setAttribute('data-count', completedCount);
+        
+        // Add tooltip functionality
+        dayElement.addEventListener('mouseenter', (e) => {
+          const count = e.target.getAttribute('data-count');
+          const date = new Date(e.target.getAttribute('data-date'));
+          const formattedDate = date.toLocaleDateString('en-US', { 
+            weekday: 'long', 
+            month: 'long', 
+            day: 'numeric',
+            year: 'numeric'
+          });
+          
+          const taskText = count === '1' ? 'task' : 'tasks';
+          tooltip.innerHTML = `<strong>${count} ${taskText} completed</strong><br>${formattedDate}`;
+          tooltip.classList.add('visible');
+          
+          // Position tooltip
+          const rect = e.target.getBoundingClientRect();
+          
+          // Position tooltip relative to viewport since it's now fixed
+          const left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2);
+          const top = rect.top - tooltip.offsetHeight - 8;
+          
+          // Keep tooltip within viewport bounds
+          const adjustedLeft = Math.max(8, Math.min(left, window.innerWidth - tooltip.offsetWidth - 8));
+          const adjustedTop = Math.max(8, top);
+          
+          tooltip.style.left = adjustedLeft + 'px';
+          tooltip.style.top = adjustedTop + 'px';
+        });
+        
+        dayElement.addEventListener('mouseleave', () => {
+          tooltip.classList.remove('visible');
+        });
+        
+      } else {
+        // Day is outside our range - make it invisible but keep the space
+        dayElement.style.opacity = '0';
+        dayElement.style.pointerEvents = 'none';
+      }
+      
+      // Set grid position (column-major order: week first, then day)
+      dayElement.style.gridColumn = week + 1;
+      dayElement.style.gridRow = day + 1;
+      
+      grid.appendChild(dayElement);
+    }
+  }
+
+  // Update legend to match our levels (0-4)
+  const legendDays = document.querySelectorAll('.legend-day');
+  legendDays.forEach((day, index) => {
+    day.setAttribute('data-level', index);
+  });
+}
 
   escapeHtml(text) {
     const div = document.createElement('div');
