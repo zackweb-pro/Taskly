@@ -154,17 +154,50 @@ class TasklyFloatingIcon {
   }
 
   openPopup() {
+    // Prevent page scrolling more robustly
+    const currentScrollY = window.scrollY;
+    const currentScrollX = window.scrollX;
+    
+    // Calculate optimal popup position to avoid scroll issues
+    const viewportHeight = window.innerHeight;
+    const popupHeight = 550; // max-height from CSS
+    const iconPosition = this.iconContainer.getBoundingClientRect();
+    
+    // Temporarily disable smooth scrolling
+    const originalScrollBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+    
     this.isPopupOpen = true;
+    
+    // Position popup dynamically to avoid viewport issues
+    if (iconPosition.top < popupHeight + 100) {
+      // If icon is too high, position popup below icon
+      this.popupContainer.style.bottom = 'auto';
+      this.popupContainer.style.top = `${iconPosition.bottom + 10}px`;
+    } else {
+      // Default position above icon
+      this.popupContainer.style.top = 'auto';
+      this.popupContainer.style.bottom = '95px';
+    }
+    
     this.popupContainer.classList.add('visible');
     this.iconContainer.classList.add('popup-open');
+    
+    // Force scroll position to stay the same
+    window.scrollTo(currentScrollX, currentScrollY);
+    
+    // Restore original scroll behavior after animation
+    setTimeout(() => {
+      document.documentElement.style.scrollBehavior = originalScrollBehavior;
+    }, 400);
     
     // Update date
     this.updateDate();
     
-    // Focus input
+    // Focus input without causing scroll
     setTimeout(() => {
       const input = this.popupContainer.querySelector('#taskInputPopup');
-      input.focus();
+      input.focus({ preventScroll: true });
     }, 300);
     
     // Load and render tasks
@@ -175,6 +208,12 @@ class TasklyFloatingIcon {
     this.isPopupOpen = false;
     this.popupContainer.classList.remove('visible');
     this.iconContainer.classList.remove('popup-open');
+    
+    // Reset positioning to default
+    setTimeout(() => {
+      this.popupContainer.style.top = 'auto';
+      this.popupContainer.style.bottom = '95px';
+    }, 300);
   }
 
   async loadTasks() {

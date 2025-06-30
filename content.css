@@ -20,29 +20,42 @@
   position: relative;
   width: 56px;
   height: 56px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-image: radial-gradient(circle farthest-corner at 10% 20%, rgba(54,123,252,1) 16.3%, rgba(0,41,118,1) 100.2%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-  transition: all 0.2s ease;
+  box-shadow: 
+    0 8px 32px rgba(54, 123, 252, 0.4),
+    0 4px 16px rgba(0, 41, 118, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
+  border: 2px solid rgba(255, 255, 255, 0.2);
 }
 
 .taskly-icon-button:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 25px rgba(102, 126, 234, 0.6);
+  transform: scale(1.15) translateY(-2px);
+  box-shadow: 
+    0 12px 40px rgba(54, 123, 252, 0.6),
+    0 8px 24px rgba(0, 41, 118, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  filter: brightness(1.1);
 }
 
 .taskly-icon-button:active {
-  transform: scale(0.95);
+  transform: scale(1.05) translateY(-1px);
+  transition: all 0.1s ease;
 }
 
 #taskly-floating-icon.popup-open .taskly-icon-button {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-  transform: rotate(45deg);
+  background-image: radial-gradient(circle farthest-corner at 80% 80%, rgba(54,123,252,1) 16.3%, rgba(0,41,118,1) 100.2%);
+  box-shadow: 
+    0 0 30px rgba(54, 123, 252, 0.8),
+    0 0 60px rgba(0, 41, 118, 0.4),
+    inset 0 0 20px rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.4);
 }
 
 .taskly-icon {
@@ -50,35 +63,60 @@
   font-size: 20px;
   font-weight: bold;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  transition: transform 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
 }
 
 #taskly-floating-icon.popup-open .taskly-icon {
-  transform: rotate(-45deg);
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.8));
 }
 
 .task-badge {
   position: absolute;
-  top: -5px;
-  right: -5px;
-  background: #ff4757;
+  top: -8px;
+  right: -8px;
+  background-image: radial-gradient(circle farthest-corner at 30% 30%, rgba(255, 71, 87, 1) 0%, rgba(255, 20, 40, 1) 100%);
   color: white;
   font-size: 10px;
   font-weight: bold;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: none;
   align-items: center;
   justify-content: center;
-  animation: pulse 2s infinite;
+  animation: pulseGlow 2s infinite;
+  box-shadow: 
+    0 4px 12px rgba(255, 71, 87, 0.5),
+    0 2px 6px rgba(255, 20, 40, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-  100% { transform: scale(1); }
+@keyframes pulseGlow {
+  0% { 
+    transform: scale(1);
+    box-shadow: 
+      0 4px 12px rgba(255, 71, 87, 0.5),
+      0 2px 6px rgba(255, 20, 40, 0.3),
+      0 0 0 0 rgba(255, 71, 87, 0.4);
+  }
+  50% { 
+    transform: scale(1.15);
+    box-shadow: 
+      0 6px 16px rgba(255, 71, 87, 0.7),
+      0 4px 8px rgba(255, 20, 40, 0.5),
+      0 0 0 8px rgba(255, 71, 87, 0.2);
+  }
+  100% { 
+    transform: scale(1);
+    box-shadow: 
+      0 4px 12px rgba(255, 71, 87, 0.5),
+      0 2px 6px rgba(255, 20, 40, 0.3),
+      0 0 0 0 rgba(255, 71, 87, 0.4);
+  }
 }
 
 .taskly-tooltip {
@@ -115,22 +153,52 @@
 /* Floating Popup Styles */
 #taskly-floating-popup {
   position: fixed;
-  bottom: 100px;
+  top: auto;
+  bottom: 95px;
   right: 30px;
-  width: 350px;
-  max-height: 500px;
+  width: 380px;
+  max-height: 60vh;
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 24px;
+  box-shadow: 
+    0 32px 64px rgba(54, 123, 252, 0.15),
+    0 16px 32px rgba(0, 41, 118, 0.1),
+    0 8px 16px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
   z-index: 9999;
   opacity: 0;
-  transform: scale(0.9) translateY(20px);
+  transform: scale(0.9) translateY(10px);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   overflow: hidden;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(54, 123, 252, 0.2);
+  will-change: transform, opacity;
+}
+
+#taskly-floating-popup::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background-image: radial-gradient(circle farthest-corner at 10% 20%, rgba(54,123,252,1) 16.3%, rgba(0,41,118,1) 100.2%);
+  border-radius: 24px 24px 0 0;
+}
+
+#taskly-floating-popup::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  right: 28px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
 #taskly-floating-popup.visible {
@@ -140,10 +208,11 @@
 }
 
 .taskly-popup-content {
-  padding: 20px;
+  padding: 24px;
   height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .taskly-popup-header {
@@ -155,33 +224,40 @@
 
 .taskly-popup-header h3 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-size: 20px;
+  font-weight: 700;
+  background-image: radial-gradient(circle farthest-corner at 10% 20%, rgba(54,123,252,1) 16.3%, rgba(0,41,118,1) 100.2%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  text-shadow: 0 2px 8px rgba(54, 123, 252, 0.3);
+  filter: drop-shadow(0 1px 2px rgba(0, 41, 118, 0.2));
 }
 
 .taskly-close-btn {
-  background: none;
+  background: rgba(255, 255, 255, 0.8);
   border: none;
-  font-size: 24px;
+  font-size: 20px;
   color: #666;
   cursor: pointer;
   padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .taskly-close-btn:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: rgba(255, 71, 87, 0.9);
+  color: white;
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(255, 71, 87, 0.4);
 }
 
 .taskly-popup-date {
@@ -199,40 +275,67 @@
 
 .taskly-input-section input {
   flex: 1;
-  padding: 12px 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
+  padding: 16px 20px;
+  border: 2px solid rgba(54, 123, 252, 0.2);
+  border-radius: 16px;
   font-size: 14px;
-  transition: all 0.2s ease;
-  background: #f8f9fa;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(248, 249, 250, 0.8);
+  color: black !important;
+  backdrop-filter: blur(10px);
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.05),
+    0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .taskly-input-section input:focus {
   outline: none;
-  border-color: #667eea;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: rgba(54, 123, 252, 0.6);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 
+    0 0 0 4px rgba(54, 123, 252, 0.1),
+    inset 0 2px 4px rgba(0, 0, 0, 0.05),
+    0 8px 25px rgba(54, 123, 252, 0.15);
+  transform: translateY(-1px);
+}
+
+.taskly-input-section input::placeholder {
+  color: rgba(102, 102, 102, 0.7);
 }
 
 .taskly-input-section button {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  width: 48px;
+  height: 48px;
+  background-image: radial-gradient(circle farthest-corner at 10% 20%, rgba(54,123,252,1) 16.3%, rgba(0,41,118,1) 100.2%);
   border: none;
-  border-radius: 12px;
+  border-radius: 16px;
   color: white;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: bold;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 
+    0 8px 20px rgba(54, 123, 252, 0.3),
+    0 4px 10px rgba(0, 41, 118, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .taskly-input-section button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 
+    0 12px 30px rgba(54, 123, 252, 0.4),
+    0 8px 16px rgba(0, 41, 118, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  filter: brightness(1.1);
+}
+
+.taskly-input-section button:active {
+  transform: scale(1.02) translateY(-1px);
+  transition: all 0.1s ease;
 }
 
 .taskly-tasks-header {
@@ -244,15 +347,18 @@
 
 .taskly-task-count {
   font-size: 12px;
-  color: #666;
-  background: #f0f0f0;
-  padding: 4px 8px;
-  border-radius: 6px;
+  color: rgba(54, 123, 252, 0.8);
+  background: rgba(54, 123, 252, 0.1);
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(54, 123, 252, 0.2);
+  font-weight: 600;
+  backdrop-filter: blur(10px);
 }
 
 .taskly-tasks-list {
   flex: 1;
-  overflow-y: auto;
+  /* overflow-y: auto; */
   max-height: 250px;
   margin-bottom: 15px;
 }
@@ -260,24 +366,47 @@
 .task-item {
   display: flex;
   align-items: center;
-  padding: 12px;
-  margin-bottom: 8px;
-  background: #f8f9fa;
-  border-radius: 12px;
-  transition: all 0.3s ease;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 1;
   transform: translateX(0);
-  animation: slideIn 0.3s ease;
+  animation: slideInGlow 0.5s ease;
+  border: 1px solid rgba(54, 123, 252, 0.1);
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.05),
+    0 2px 4px rgba(54, 123, 252, 0.1);
+  position: relative;
+  overflow: hidden;
 }
 
-@keyframes slideIn {
+.task-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-image: radial-gradient(circle farthest-corner at 10% 20%, rgba(54,123,252,1) 16.3%, rgba(0,41,118,1) 100.2%);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.3s ease;
+}
+
+@keyframes slideInGlow {
   from {
     opacity: 0;
-    transform: translateX(20px);
+    transform: translateX(30px) scale(0.95);
+    box-shadow: 0 0 0 rgba(54, 123, 252, 0);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
+    box-shadow: 
+      0 4px 12px rgba(0, 0, 0, 0.05),
+      0 2px 4px rgba(54, 123, 252, 0.1);
   }
 }
 
@@ -311,13 +440,26 @@
 }
 
 .task-item:hover {
-  background: #e9ecef;
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 
+    0 12px 30px rgba(54, 123, 252, 0.15),
+    0 8px 16px rgba(0, 0, 0, 0.1);
+  border-color: rgba(54, 123, 252, 0.3);
+}
+
+.task-item:hover::before {
+  width: 6px;
 }
 
 .task-item.completed {
-  opacity: 0.6;
-  background: #e8f5e8;
+  opacity: 0.7;
+  background: rgba(76, 175, 80, 0.1);
+  border-color: rgba(76, 175, 80, 0.3);
+}
+
+.task-item.completed::before {
+  background-image: linear-gradient(135deg, rgba(76, 175, 80, 1) 0%, rgba(56, 142, 60, 1) 100%);
 }
 
 .task-content {
@@ -329,22 +471,31 @@
 }
 
 .task-checkbox {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #ddd;
-  border-radius: 6px;
+  width: 24px !important;
+  height: 24px !important;
+  border: 2px solid rgba(54, 123, 252, 0.3);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 14px;
   color: white;
-  background: #fff;
-  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.05),
+    0 2px 4px rgba(54, 123, 252, 0.1);
+  flex-shrink: 0;
 }
 
 .task-item.completed .task-checkbox {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-color: #667eea;
+  background-image: radial-gradient(circle farthest-corner at 10% 20%, rgba(54,123,252,1) 16.3%, rgba(0,41,118,1) 100.2%);
+  border-color: rgba(54, 123, 252, 0.8);
+  transform: scale(1.1);
+  box-shadow: 
+    0 4px 12px rgba(54, 123, 252, 0.3),
+    0 0 0 2px rgba(54, 123, 252, 0.2);
 }
 
 .task-text {
@@ -359,24 +510,36 @@
 }
 
 .task-delete {
-  background: none;
-  border: none;
-  color: #ccc;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 71, 87, 0.2);
+  color: rgba(255, 71, 87, 0.6);
   font-size: 16px;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
+  backdrop-filter: blur(10px);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .task-item:hover .task-delete {
   opacity: 1;
+  transform: scale(1.05);
 }
 
 .task-delete:hover {
-  background: #ff4757;
+  background-image: radial-gradient(circle farthest-corner at 30% 30%, rgba(255, 71, 87, 1) 0%, rgba(255, 20, 40, 1) 100%);
   color: white;
+  border-color: rgba(255, 71, 87, 0.8);
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 
+    0 4px 12px rgba(255, 71, 87, 0.4),
+    0 0 0 2px rgba(255, 71, 87, 0.2);
 }
 
 .taskly-empty-state {
@@ -398,63 +561,369 @@
 
 .taskly-clear-btn {
   width: 100%;
-  padding: 10px;
-  background: #ff4757;
+  padding: 14px;
+  background-image: radial-gradient(circle farthest-corner at 30% 30%, rgba(255, 71, 87, 1) 0%, rgba(255, 20, 40, 1) 100%);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 6px 20px rgba(255, 71, 87, 0.3),
+    0 3px 10px rgba(255, 20, 40, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .taskly-clear-btn:hover {
-  background: #ff3742;
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 
+    0 8px 25px rgba(255, 71, 87, 0.4),
+    0 4px 12px rgba(255, 20, 40, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  filter: brightness(1.1);
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  #taskly-floating-icon {
-    bottom: 20px;
-    right: 20px;
+.taskly-clear-btn:active {
+  transform: translateY(-1px) scale(1.01);
+  transition: all 0.1s ease;
+}
+
+/* Advanced Taskly Aesthetic Enhancements */
+
+/* Floating icon with particle effect */
+#taskly-floating-icon::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  right: -10px;
+  bottom: -10px;
+  background: radial-gradient(circle, rgba(54,123,252,0.1) 0%, transparent 70%);
+  border-radius: 50%;
+  opacity: 0;
+  animation: particleGlow 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes particleGlow {
+  0%, 100% { 
+    opacity: 0;
+    transform: scale(0.8);
   }
-  
-  #taskly-floating-popup {
-    bottom: 80px;
-    right: 20px;
-    left: 20px;
-    width: auto;
-  }
-  
-  .taskly-icon-button {
-    width: 48px;
-    height: 48px;
-  }
-  
-  .taskly-icon {
-    font-size: 18px;
-  }
-  
-  .taskly-tooltip {
-    display: none; /* Hide tooltip on mobile */
+  50% { 
+    opacity: 1;
+    transform: scale(1.2);
   }
 }
 
-/* Scrollbar styling */
+/* Enhanced floating icon with breathing effect */
+#taskly-floating-icon.visible .taskly-icon-button {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { 
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% { 
+    transform: scale(1.05);
+    filter: brightness(1.1);
+  }
+}
+
+/* Glass morphism effect for popup */
+#taskly-floating-popup {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Animated gradient border for popup */
+#taskly-floating-popup::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, 
+    rgba(54,123,252,0.6) 0%, 
+    rgba(0,41,118,0.6) 25%, 
+    rgba(54,123,252,0.6) 50%, 
+    rgba(0,41,118,0.6) 75%, 
+    rgba(54,123,252,0.6) 100%);
+  border-radius: 26px;
+  z-index: -1;
+  background-size: 400% 400%;
+  animation: gradientBorder 3s ease infinite;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+#taskly-floating-popup.visible::after {
+  opacity: 1;
+}
+
+@keyframes gradientBorder {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Enhanced popup header with floating particles */
+.taskly-popup-header::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: radial-gradient(ellipse at center, rgba(54,123,252,0.1) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: headerFloat 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes headerFloat {
+  0%, 100% { 
+    transform: translateY(0) scale(1);
+    opacity: 0.3;
+  }
+  50% { 
+    transform: translateY(-5px) scale(1.1);
+    opacity: 0.6;
+  }
+}
+
+/* Stunning input field with shimmer effect */
+.taskly-input-section input {
+  position: relative;
+  overflow: hidden;
+}
+
+.taskly-input-section input::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(54,123,252,0.2) 50%, 
+    transparent 100%);
+  transition: left 0.8s ease;
+}
+
+.taskly-input-section input:focus::before {
+  left: 100%;
+}
+
+/* Magical task item entrance */
+.task-item {
+  position: relative;
+  overflow: visible;
+}
+
+.task-item::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, 
+    rgba(54,123,252,0.05) 0%, 
+    rgba(0,41,118,0.05) 100%);
+  border-radius: 16px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.task-item:hover::after {
+  opacity: 1;
+}
+
+/* Checkbox with ripple effect */
+.task-checkbox {
+  position: relative;
+  overflow: hidden;
+}
+
+.task-checkbox::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(54,123,252,0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+}
+
+.task-item.completed .task-checkbox::before {
+  width: 40px;
+  height: 40px;
+}
+
+/* Enhanced delete button with danger glow */
+.task-delete {
+  position: relative;
+}
+
+.task-delete::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, 
+    rgba(255,71,87,0.3) 0%, 
+    rgba(255,20,40,0.3) 100%);
+  border-radius: 10px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+}
+
+.task-delete:hover::before {
+  opacity: 1;
+  animation: dangerPulse 1s ease infinite;
+}
+
+@keyframes dangerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Clear button with success wave */
+.taskly-clear-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.taskly-clear-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255,255,255,0.3) 50%, 
+    transparent 100%);
+  transition: left 0.6s ease;
+}
+
+.taskly-clear-btn:hover::before {
+  left: 100%;
+}
+
+/* Enhanced scrollbar for tasks list */
 .taskly-tasks-list::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 .taskly-tasks-list::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(54,123,252,0.1);
+  border-radius: 3px;
 }
 
 .taskly-tasks-list::-webkit-scrollbar-thumb {
-  background: #ddd;
-  border-radius: 2px;
+  background: linear-gradient(135deg, 
+    rgba(54,123,252,0.6) 0%, 
+    rgba(0,41,118,0.6) 100%);
+  border-radius: 3px;
+  transition: all 0.3s ease;
 }
 
 .taskly-tasks-list::-webkit-scrollbar-thumb:hover {
-  background: #bbb;
+  background: linear-gradient(135deg, 
+    rgba(54,123,252,0.8) 0%, 
+    rgba(0,41,118,0.8) 100%);
+  box-shadow: 0 0 10px rgba(54,123,252,0.5);
+}
+
+/* Floating popup shadow enhancement */
+#taskly-floating-popup.visible {
+  box-shadow: 
+    0 40px 80px rgba(54, 123, 252, 0.15),
+    0 20px 40px rgba(0, 41, 118, 0.1),
+    0 10px 20px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* Task count badge with floating animation */
+.taskly-task-count {
+  animation: floatBadge 3s ease-in-out infinite;
+}
+
+@keyframes floatBadge {
+  0%, 100% { 
+    transform: translateY(0);
+  }
+  50% { 
+    transform: translateY(-2px);
+  }
+}
+
+/* Tooltip enhancement */
+.taskly-tooltip {
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 8px 20px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Date display with subtle glow */
+.taskly-popup-date {
+  text-shadow: 0 0 10px rgba(54,123,252,0.3);
+  animation: dateGlow 4s ease-in-out infinite;
+}
+
+@keyframes dateGlow {
+  0%, 100% { 
+    text-shadow: 0 0 10px rgba(54,123,252,0.3);
+  }
+  50% { 
+    text-shadow: 0 0 15px rgba(54,123,252,0.5);
+  }
+}
+
+/* Empty state enhancement */
+.taskly-empty-state {
+  background: radial-gradient(circle at center, 
+    rgba(54,123,252,0.05) 0%, 
+    transparent 70%);
+  border-radius: 16px;
+  border: 1px dashed rgba(54,123,252,0.2);
+  animation: emptyFloat 5s ease-in-out infinite;
+}
+
+@keyframes emptyFloat {
+  0%, 100% { 
+    transform: translateY(0);
+    background: radial-gradient(circle at center, 
+      rgba(54,123,252,0.05) 0%, 
+      transparent 70%);
+  }
+  50% { 
+    transform: translateY(-3px);
+    background: radial-gradient(circle at center, 
+      rgba(54,123,252,0.08) 0%, 
+      transparent 70%);
+  }
 }
