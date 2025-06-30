@@ -138,11 +138,36 @@ class TasklyPopup {
     // Render tasks
     tasksList.innerHTML = this.tasks.map(task => `
       <div class="task-item ${task.completed ? 'completed' : ''}" data-task-id="${task.id}">
-        <div class="task-checkbox ${task.completed ? 'checked' : ''}" onclick="taskly.toggleTask(${task.id})"></div>
-        <div class="task-text" onclick="taskly.toggleTask(${task.id})">${this.escapeHtml(task.text)}</div>
-        <button class="task-delete" onclick="taskly.deleteTask(${task.id})" title="Delete task">×</button>
+        <div class="task-checkbox ${task.completed ? 'checked' : ''}" data-task-id="${task.id}"></div>
+        <div class="task-text" data-task-id="${task.id}">${this.escapeHtml(task.text)}</div>
+        <button class="task-delete" data-task-id="${task.id}" title="Delete task">×</button>
       </div>
     `).join('');
+    
+    // Add event listeners for task interactions
+    this.setupTaskEventListeners();
+  }
+
+  setupTaskEventListeners() {
+    const tasksList = document.getElementById('tasksList');
+    
+    // Remove existing event listeners by cloning and replacing the node
+    const newTasksList = tasksList.cloneNode(true);
+    tasksList.parentNode.replaceChild(newTasksList, tasksList);
+    
+    // Add event delegation for task interactions
+    newTasksList.addEventListener('click', (e) => {
+      const taskId = parseInt(e.target.getAttribute('data-task-id'));
+      
+      if (e.target.classList.contains('task-checkbox') || e.target.classList.contains('task-text')) {
+        // Toggle task completion
+        this.toggleTask(taskId);
+      } else if (e.target.classList.contains('task-delete')) {
+        // Delete task
+        e.stopPropagation();
+        this.deleteTask(taskId);
+      }
+    });
   }
 
   escapeHtml(text) {
