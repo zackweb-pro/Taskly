@@ -231,43 +231,54 @@ class TasklyPopup {
     }
   }
 
-  populateYearSelector(allData) {
-    const yearSelector = document.getElementById('yearSelector');
-    const years = new Set();
-    
-    // Get all years from data
-    Object.keys(allData).forEach(dateStr => {
-      const year = new Date(dateStr).getFullYear();
-      if (!isNaN(year)) {
+populateYearSelector(allData) {
+  const yearSelector = document.getElementById('yearSelector');
+  const years = new Set();
+  
+  // Get all years from data
+  Object.keys(allData).forEach(dateStr => {
+    if (dateStr && dateStr.includes('-')) {
+      const year = parseInt(dateStr.split('-')[0]);
+      if (!isNaN(year) && year >= 2020 && year <= 2030) { // Reasonable year range
         years.add(year);
       }
-    });
-    
-    // Add current year if not present
-    const currentYear = new Date().getFullYear();
-    years.add(currentYear);
-    
-    // Sort years in descending order
-    const sortedYears = Array.from(years).sort((a, b) => b - a);
-    
-    // Clear and populate selector
-    yearSelector.innerHTML = '';
-    
-    // Add "Last 365 days" option
-    const lastYearOption = document.createElement('option');
-    lastYearOption.value = 'last365';
-    lastYearOption.textContent = 'Last 365 days';
-    lastYearOption.selected = true;
-    yearSelector.appendChild(lastYearOption);
-    
-    // Add year options
-    sortedYears.forEach(year => {
-      const option = document.createElement('option');
-      option.value = year;
-      option.textContent = year;
-      yearSelector.appendChild(option);
-    });
+    }
+  });
+  
+  // Add current year if not present
+  const currentYear = new Date().getFullYear();
+  years.add(currentYear);
+  
+  // Sort years in descending order
+  const sortedYears = Array.from(years).sort((a, b) => b - a);
+  
+  // Store current selection to preserve it
+  const currentSelection = yearSelector.value;
+  
+  // Clear and populate selector
+  yearSelector.innerHTML = '';
+  
+  // Add "Last 365 days" option
+  const lastYearOption = document.createElement('option');
+  lastYearOption.value = 'last365';
+  lastYearOption.textContent = 'Last 365 days';
+  yearSelector.appendChild(lastYearOption);
+  
+  // Add year options
+  sortedYears.forEach(year => {
+    const option = document.createElement('option');
+    option.value = year.toString();
+    option.textContent = year.toString();
+    yearSelector.appendChild(option);
+  });
+  
+  // Restore selection or default to "Last 365 days"
+  if (currentSelection && [...yearSelector.options].some(opt => opt.value === currentSelection)) {
+    yearSelector.value = currentSelection;
+  } else {
+    yearSelector.value = 'last365';
   }
+}
 
   onYearChange() {
     this.generateStatsView();
