@@ -1,15 +1,30 @@
-// Taskly Popup JavaScript
+// Taskly Popup JavaScript with Supabase Integration
 class TasklyPopup {
   constructor() {
     this.tasks = [];
+    this.userId = null;
+    this.isOnline = navigator.onLine;
     this.init();
   }
 
   async init() {
+    // Initialize user ID
+    this.userId = await supabase.getUserId();
+    
+    // Load tasks (try cloud first, fallback to local)
     await this.loadTasks();
+    
     this.setupEventListeners();
     this.updateDisplay();
     this.displayCurrentDate();
+    
+    // Set up online/offline sync
+    this.setupNetworkListeners();
+    
+    // Sync with cloud if online
+    if (this.isOnline) {
+      this.syncWithCloud();
+    }
   }
 
   setupEventListeners() {
@@ -40,6 +55,37 @@ class TasklyPopup {
     taskInput.focus();
   }
 
+  setupNetworkListeners() {
+    window.addEventListener('online', () => {
+      this.isOnline = true;
+      this.syncWithCloud();
+    });
+    
+    window.addEventListener('offline', () => {
+      this.isOnline = false;
+    });
+  }
+
+  async syncWithCloud() {
+    if (!this.isOnline) return;
+    
+    try {
+      // Sync today's tasks
+      await this.syncTodaysTasks();
+      
+      // Show sync status briefly
+      this.showSyncStatus('✓ Synced');
+    } catch (error) {
+      console.error('Sync failed:', error);
+      this.showSyncStatus('⚠ Sync failed');
+    }
+  }
+
+  showSyncStatus(message) {
+    // You can implement a small sync indicator in the UI
+    console.log(message);
+  }
+
   displayCurrentDate() {
     const dateElement = document.getElementById('currentDate');
     const today = new Date();
@@ -54,13 +100,40 @@ class TasklyPopup {
 
   async loadTasks() {
     try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      if (this.isOnline) {
+        // Try to load from Supabase first
+        try {
+          await this.ensureUserExists();
+          const cloudTasks = await supabase.select('taskly_tasks', {
+            eq: { user_id: this.userId, task_date: today },
+            order: 'created_at.desc'
+          });
+          
+          this.tasks = cloudTasks.map(task => ({
+            id: task.task_id,
+            text: task.text,
+            completed: task.completed,
+            dateCreated: task.date_created
+          }));
+          
+          // Also save to local storage as backup
+          await this.saveTasksLocal();
+          return;
+        } catch (error) {
+          console.error('Failed to load from cloud, using local storage:', error);
+        }
+      }
+      
+      // Fallback to local storage
       const result = await chrome.storage.local.get(['tasklyTasks']);
       this.tasks = result.tasklyTasks || [];
       
       // Filter tasks for today only
-      const today = new Date().toDateString();
+      const todayStr = new Date().toDateString();
       this.tasks = this.tasks.filter(task => 
-        new Date(task.dateCreated).toDateString() === today
+        new Date(task.dateCreated).toDateString() === todayStr
       );
     } catch (error) {
       console.error('Error loading tasks:', error);
@@ -68,17 +141,108 @@ class TasklyPopup {
     }
   }
 
+  async ensureUserExists() {
+    try {
+      // Check if user exists in database
+      const existingUsers = await supabase.select('taskly_users', {
+        eq: { user_id: this.userId }
+      });
+      
+      if (existingUsers.length === 0) {
+        // Create user record
+        await supabase.insert('taskly_users', {
+          user_id: this.userId
+        });
+      }
+    } catch (error) {
+      console.error('Error ensuring user exists:', error);
+    }
+  }
+
   async saveTasks() {
     try {
-      // Save current day tasks
+      // Always save to local storage first (for offline support)
+      await this.saveTasksLocal();
+      
+      // If online, sync to cloud
+      if (this.isOnline) {
+        await this.syncTodaysTasks();
+      }
+    } catch (error) {
+      console.error('Error saving tasks:', error);
+    }
+  }
+
+  async saveTasksLocal() {
+    try {
+      // Save current day tasks to local storage
       await chrome.storage.local.set({ tasklyTasks: this.tasks });
       
-      // Also save to historical data with date key
+      // Also save to historical data with date key for local stats
       const today = new Date().toISOString().split('T')[0];
       const historicalKey = `tasklyTasks_${today}`;
       await chrome.storage.local.set({ [historicalKey]: this.tasks });
     } catch (error) {
-      console.error('Error saving tasks:', error);
+      console.error('Error saving tasks locally:', error);
+    }
+  }
+
+  async syncTodaysTasks() {
+    if (!this.isOnline) return;
+    
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get existing tasks from cloud for today
+      const existingTasks = await supabase.select('taskly_tasks', {
+        eq: { user_id: this.userId, task_date: today }
+      });
+      
+      // Create a map of existing cloud tasks by task_id
+      const cloudTasksMap = new Map(existingTasks.map(task => [task.task_id, task]));
+      
+      // Process each local task
+      for (const task of this.tasks) {
+        const cloudTask = cloudTasksMap.get(task.id);
+        
+        if (cloudTask) {
+          // Update existing task if different
+          if (cloudTask.text !== task.text || cloudTask.completed !== task.completed) {
+            await supabase.update('taskly_tasks', 
+              {
+                text: task.text,
+                completed: task.completed,
+                date_created: task.dateCreated
+              },
+              {
+                eq: { user_id: this.userId, task_id: task.id, task_date: today }
+              }
+            );
+          }
+          cloudTasksMap.delete(task.id); // Mark as processed
+        } else {
+          // Insert new task
+          await supabase.insert('taskly_tasks', {
+            user_id: this.userId,
+            task_id: task.id,
+            text: task.text,
+            completed: task.completed,
+            date_created: task.dateCreated,
+            task_date: today
+          });
+        }
+      }
+      
+      // Delete tasks that exist in cloud but not locally (were deleted locally)
+      for (const [taskId] of cloudTasksMap) {
+        await supabase.delete('taskly_tasks', {
+          eq: { user_id: this.userId, task_id: taskId, task_date: today }
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error syncing with cloud:', error);
+      throw error;
     }
   }
 
@@ -207,7 +371,53 @@ class TasklyPopup {
 
   async generateStatsView() {
     try {
-      // Get all historical data
+      let allData = {};
+      
+      if (this.isOnline) {
+        // Try to get data from Supabase first
+        try {
+          await this.ensureUserExists();
+          
+          // Get all tasks for this user
+          const cloudTasks = await supabase.select('taskly_tasks', {
+            eq: { user_id: this.userId },
+            order: 'task_date.desc'
+          });
+          
+          // Group tasks by date
+          cloudTasks.forEach(task => {
+            const dateStr = task.task_date;
+            if (!allData[dateStr]) {
+              allData[dateStr] = [];
+            }
+            allData[dateStr].push({
+              id: task.task_id,
+              text: task.text,
+              completed: task.completed,
+              dateCreated: task.date_created
+            });
+          });
+          
+        } catch (error) {
+          console.error('Failed to load stats from cloud, using local data:', error);
+          allData = await this.getLocalHistoricalData();
+        }
+      } else {
+        // Use local data when offline
+        allData = await this.getLocalHistoricalData();
+      }
+
+      this.populateYearSelector(allData);
+      this.updateStatsOverview(allData);
+      this.generateContributionHeatmap(allData);
+    } catch (error) {
+      console.error('Error generating stats:', error);
+    }
+  }
+
+  async getLocalHistoricalData() {
+    try {
+      // Get all historical data from local storage (fallback)
       const result = await chrome.storage.local.get(null);
       const allData = {};
       
@@ -222,12 +432,11 @@ class TasklyPopup {
           allData[today] = result[key] || [];
         }
       });
-
-      this.populateYearSelector(allData);
-      this.updateStatsOverview(allData);
-      this.generateContributionHeatmap(allData);
+      
+      return allData;
     } catch (error) {
-      console.error('Error generating stats:', error);
+      console.error('Error getting local historical data:', error);
+      return {};
     }
   }
 
