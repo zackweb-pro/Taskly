@@ -14,7 +14,15 @@
         <h1>🌟 Taskly</h1>
         <p class="date" id="currentDate"></p>
       </div>
-      <div style="width: 60px;"></div> <!-- Spacer for centering -->
+      <div class="user-menu">
+        <button id="userMenuBtn" class="user-menu-btn">👤</button>
+        <div id="userMenuDropdown" class="user-menu-dropdown hidden">
+          <div id="userInfo" class="user-info">
+            <span id="userEmail"></span>
+            <button id="signOutBtn" class="menu-item">Sign Out</button>
+          </div>
+        </div>
+      </div>
     </header>
     
     <!-- Main Task View -->
@@ -125,6 +133,7 @@
   
   <script src="config.js"></script>
   <script src="supabase.js"></script>
+  <script src="auth.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

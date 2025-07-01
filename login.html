@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taskly - Sign In</title>
+    <link rel="stylesheet" href="login.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>🌟 Taskly</h1>
+            <p>Sign in to sync your tasks across devices</p>
+        </div>
+
+        <div class="login-form-container">
+            <!-- Sign In Form -->
+            <form id="signInForm" class="auth-form">
+                <h2>Welcome Back</h2>
+                <div class="form-group">
+                    <label for="signInEmail">Email</label>
+                    <input type="email" id="signInEmail" required placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="signInPassword">Password</label>
+                    <input type="password" id="signInPassword" required placeholder="Your password">
+                </div>
+                <button type="submit" class="btn-primary">Sign In</button>
+                <div class="form-links">
+                    <a href="#" id="showSignUp">Don't have an account? Sign up</a>
+                    <a href="#" id="showForgotPassword">Forgot password?</a>
+                </div>
+            </form>
+
+            <!-- Sign Up Form -->
+            <form id="signUpForm" class="auth-form hidden">
+                <h2>Create Account</h2>
+                <div class="form-group">
+                    <label for="signUpEmail">Email</label>
+                    <input type="email" id="signUpEmail" required placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="signUpPassword">Password</label>
+                    <input type="password" id="signUpPassword" required placeholder="At least 6 characters">
+                </div>
+                <div class="form-group">
+                    <label for="signUpPasswordConfirm">Confirm Password</label>
+                    <input type="password" id="signUpPasswordConfirm" required placeholder="Confirm your password">
+                </div>
+                <button type="submit" class="btn-primary">Create Account</button>
+                <div class="form-links">
+                    <a href="#" id="showSignIn">Already have an account? Sign in</a>
+                </div>
+            </form>
+
+            <!-- Forgot Password Form -->
+            <form id="forgotPasswordForm" class="auth-form hidden">
+                <h2>Reset Password</h2>
+                <p>Enter your email to receive a password reset link</p>
+                <div class="form-group">
+                    <label for="resetEmail">Email</label>
+                    <input type="email" id="resetEmail" required placeholder="your@email.com">
+                </div>
+                <button type="submit" class="btn-primary">Send Reset Link</button>
+                <div class="form-links">
+                    <a href="#" id="backToSignIn">Back to Sign In</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="statusMessage" class="status-message hidden"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="config.js"></script>
+    <script src="supabase.js"></script>
+    <script src="auth.js"></script>
+    <script src="login.js"></script>
+</body>
+</html>

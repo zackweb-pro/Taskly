@@ -18,6 +18,10 @@ const SOURCE_FILES = [
   'popup.css',
   'config.js',
   'supabase.js',
+  'auth.js',
+  'login.html',
+  'login.js',
+  'login.css',
   'background.js',
   'content.js',
   'content.css',
@@ -136,6 +140,12 @@ function updateManifestForProduction() {
     if (manifest.key) {
       delete manifest.key;
       console.log('✓ Removed development key from manifest');
+    }
+    
+    // Add identity permission for Supabase Auth
+    if (!manifest.permissions.includes('identity')) {
+      manifest.permissions.push('identity');
+      console.log('✓ Added identity permission for authentication');
     }
     
     // Update version if needed

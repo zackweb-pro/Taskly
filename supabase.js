@@ -28,30 +28,43 @@ class SupabaseClient {
     }
   }
 
-  // Generate a simple user ID based on Chrome extension ID and installation
+  // Get authenticated user ID
   async getUserId() {
-    try {
-      const result = await chrome.storage.local.get(['tasklyUserId']);
-      if (result.tasklyUserId) {
-        return result.tasklyUserId;
-      }
-      
-      // Generate a unique user ID
-      const userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      await chrome.storage.local.set({ tasklyUserId: userId });
-      return userId;
-    } catch (error) {
-      console.error('Error getting user ID:', error);
-      return 'user_' + Date.now();
+    // Authentication is now mandatory, so always use the authenticated user ID
+    if (typeof tasklyAuth !== 'undefined' && tasklyAuth.isLoggedIn()) {
+      return tasklyAuth.getUserId();
     }
+    
+    // If not authenticated, return null (will trigger auth required flow)
+    return null;
+  }
+
+  // Get authorization headers with user token
+  async getAuthHeaders() {
+    const baseHeaders = {
+      'Content-Type': 'application/json',
+      'apikey': this.key,
+      'Authorization': `Bearer ${this.key}`
+    };
+
+    // Add user token if authenticated
+    if (typeof tasklyAuth !== 'undefined' && tasklyAuth.isLoggedIn()) {
+      const session = await tasklyAuth.getStoredSession();
+      if (session && session.access_token) {
+        baseHeaders['Authorization'] = `Bearer ${session.access_token}`;
+      }
+    }
+
+    return baseHeaders;
   }
 
   // Insert data into a table
   async insert(table, data) {
     try {
+      const headers = await this.getAuthHeaders();
       const response = await fetch(`${this.url}/rest/v1/${table}`, {
         method: 'POST',
-        headers: this.headers,
+        headers: headers,
         body: JSON.stringify(data)
       });
 

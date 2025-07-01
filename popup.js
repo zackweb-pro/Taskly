@@ -8,15 +8,21 @@ class TasklyPopup {
   }
 
   async init() {
-    // Initialize user ID
-    this.userId = await supabase.getUserId();
+    // Check authentication status first
+    if (!await this.checkAuthenticationRequired()) {
+      return; // User will be redirected to login
+    }
+
+    // Initialize user ID (authenticated user)
+    this.userId = tasklyAuth.getUserId();
     
-    // Load tasks (try cloud first, fallback to local)
+    // Load tasks from cloud
     await this.loadTasks();
     
     this.setupEventListeners();
     this.updateDisplay();
     this.displayCurrentDate();
+    this.updateUserInterface();
     
     // Set up online/offline sync
     this.setupNetworkListeners();
@@ -25,6 +31,82 @@ class TasklyPopup {
     if (this.isOnline) {
       this.syncWithCloud();
     }
+  }
+
+  async checkAuthenticationRequired() {
+    // Wait for auth to initialize
+    await new Promise(resolve => {
+      if (tasklyAuth.currentUser !== null || tasklyAuth.isAuthenticated === false) {
+        resolve();
+      } else {
+        setTimeout(resolve, 500); // Give auth time to initialize
+      }
+    });
+
+    if (!tasklyAuth.isLoggedIn()) {
+      // User not authenticated - redirect to login
+      this.showAuthenticationRequired();
+      return false;
+    }
+    return true;
+  }
+
+  showAuthenticationRequired() {
+    // Hide main interface
+    document.getElementById('mainView').style.display = 'none';
+    document.getElementById('statsView').style.display = 'none';
+    
+    // Show authentication required message
+    const authRequiredHtml = `
+      <div class="auth-required-container">
+        <div class="auth-required-content">
+          <h2>🌟 Welcome to Taskly!</h2>
+          <p>To keep your tasks safe and sync them across all your devices, please create an account or sign in.</p>
+          <div class="auth-required-buttons">
+            <button id="createAccountBtn" class="btn-primary">Create Account</button>
+            <button id="signInExistingBtn" class="btn-secondary">Sign In</button>
+          </div>
+          <div class="auth-benefits">
+            <div class="benefit-item">
+              <span class="benefit-icon">☁️</span>
+              <span>Never lose your tasks</span>
+            </div>
+            <div class="benefit-item">
+              <span class="benefit-icon">📱</span>
+              <span>Sync across devices</span>
+            </div>
+            <div class="benefit-item">
+              <span class="benefit-icon">🔒</span>
+              <span>Secure & private</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.querySelector('.taskly-container').innerHTML = authRequiredHtml;
+    
+    // Add event listeners for auth buttons
+    document.getElementById('createAccountBtn').addEventListener('click', () => {
+      this.openLoginPage('signup');
+    });
+    
+    document.getElementById('signInExistingBtn').addEventListener('click', () => {
+      this.openLoginPage('signin');
+    });
+  }
+
+  openLoginPage(mode = 'signin') {
+    // Open login page in new tab
+    const loginUrl = chrome.runtime.getURL('login.html') + (mode === 'signup' ? '#signup' : '#signin');
+    chrome.tabs.create({ url: loginUrl });
+    window.close();
+  }
+
+  updateUserInterface() {
+    // Update user menu to show authenticated user (authentication is mandatory)
+    const userEmail = tasklyAuth.getUserEmail();
+    document.getElementById('userEmail').textContent = userEmail;
   }
 
   setupEventListeners() {
@@ -51,8 +133,43 @@ class TasklyPopup {
     const yearSelector = document.getElementById('yearSelector');
     yearSelector.addEventListener('change', () => this.onYearChange());
 
+    // User menu
+    const userMenuBtn = document.getElementById('userMenuBtn');
+    const userMenuDropdown = document.getElementById('userMenuDropdown');
+    
+    if (userMenuBtn && userMenuDropdown) {
+      userMenuBtn.addEventListener('click', () => {
+        userMenuDropdown.classList.toggle('hidden');
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!userMenuBtn.contains(e.target) && !userMenuDropdown.contains(e.target)) {
+          userMenuDropdown.classList.add('hidden');
+        }
+      });
+
+      // Sign out button
+      const signOutBtn = document.getElementById('signOutBtn');
+      if (signOutBtn) {
+        signOutBtn.addEventListener('click', async () => {
+          await this.handleSignOut();
+        });
+      }
+    }
+
     // Focus on input when popup opens
     taskInput.focus();
+  }
+
+  async handleSignOut() {
+    try {
+      await tasklyAuth.signOut();
+      // Reload the popup to show auth required screen
+      window.location.reload();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   }
 
   setupNetworkListeners() {
