@@ -77,7 +77,10 @@ class TasklyAuth {
         },
         body: JSON.stringify({
           email: email,
-          password: password
+          password: password,
+          options: {
+            emailRedirectTo: chrome.runtime.getURL('login.html')
+          }
         })
       });
 
@@ -85,7 +88,7 @@ class TasklyAuth {
       console.log('Signup response:', data); // Debug log
 
       if (response.ok && data.user) {
-        // Store session if provided
+        // Store session if provided (immediate confirmation disabled)
         if (data.session) {
           await this.storeSession(data.session);
           this.currentUser = data.user;
