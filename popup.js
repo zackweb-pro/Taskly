@@ -1,92 +1,111 @@
-// Taskly Popup JavaScript with Supabase Integration
+// Taskly Popup JavaScript with Dual Storage System
 class TasklyPopup {
   constructor() {
     this.tasks = [];
     this.userId = null;
     this.isOnline = navigator.onLine;
+    this.isGuestMode = false;
+    this.isCloudMode = false;
     this.init();
   }
 
   async init() {
-    // Check authentication status first
-    if (!await this.checkAuthenticationRequired()) {
-      return; // User will be redirected to login
+    // Check user mode (guest vs authenticated)
+    const userMode = await this.checkUserMode();
+    
+    if (userMode === 'none') {
+      // Show authentication options
+      this.showAuthenticationOptions();
+      return;
+    } else if (userMode === 'guest') {
+      // Guest mode - local storage only
+      this.isGuestMode = true;
+      this.isCloudMode = false;
+      await this.initGuestMode();
+    } else if (userMode === 'authenticated') {
+      // Cloud mode - authenticated user
+      this.isGuestMode = false;
+      this.isCloudMode = true;
+      this.userId = tasklyAuth.getUserId();
+      await this.initCloudMode();
     }
 
-    // Initialize user ID (authenticated user)
-    this.userId = tasklyAuth.getUserId();
-    
-    // Load tasks from cloud
+    // Common initialization
     await this.loadTasks();
-    
     this.setupEventListeners();
     this.updateDisplay();
     this.displayCurrentDate();
     this.updateUserInterface();
     
-    // Set up online/offline sync
-    this.setupNetworkListeners();
-    
-    // Sync with cloud if online
-    if (this.isOnline) {
-      this.syncWithCloud();
-    }
-  }
-
-  async checkAuthenticationRequired() {
-    // Wait for auth to initialize
-    await new Promise(resolve => {
-      if (tasklyAuth.currentUser !== null || tasklyAuth.isAuthenticated === false) {
-        resolve();
-      } else {
-        setTimeout(resolve, 500); // Give auth time to initialize
+    // Set up online/offline sync (only for cloud mode)
+    if (this.isCloudMode) {
+      this.setupNetworkListeners();
+      if (this.isOnline) {
+        this.syncWithCloud();
       }
-    });
-
-    if (!tasklyAuth.isLoggedIn()) {
-      // User not authenticated - redirect to login
-      this.showAuthenticationRequired();
-      return false;
     }
-    return true;
   }
 
-  showAuthenticationRequired() {
+  async checkUserMode() {
+    try {
+      // Check if user chose guest mode
+      const guestMode = await chrome.storage.local.get(['tasklyGuestMode']);
+      if (guestMode.tasklyGuestMode === true) {
+        return 'guest';
+      }
+
+      // Check if user is authenticated
+      if (tasklyAuth) {
+        await new Promise(resolve => {
+          if (tasklyAuth.currentUser !== null || tasklyAuth.isAuthenticated === false) {
+            resolve();
+          } else {
+            setTimeout(resolve, 500);
+          }
+        });
+
+        if (tasklyAuth.isLoggedIn()) {
+          return 'authenticated';
+        }
+      }
+
+      // No mode chosen yet
+      return 'none';
+    } catch (error) {
+      console.error('Error checking user mode:', error);
+      return 'none';
+    }
+  }
+
+  async initGuestMode() {
+    console.log('Initializing guest mode');
+    // Set guest mode flag
+    await chrome.storage.local.set({ tasklyGuestMode: true });
+  }
+
+  async initCloudMode() {
+    console.log('Initializing cloud mode');
+    // Clear guest mode flag and ensure user exists in database
+    await chrome.storage.local.remove(['tasklyGuestMode']);
+    if (this.isOnline) {
+      await this.ensureUserExists();
+    }
+  }
+
+  showAuthenticationOptions() {
     // Hide main interface
     document.getElementById('mainView').style.display = 'none';
     document.getElementById('statsView').style.display = 'none';
     
-    // Show authentication required message
-    const authRequiredHtml = `
-      <div class="auth-required-container">
-        <div class="auth-required-content">
-          <h2>🌟 Welcome to Taskly!</h2>
-          <p>To keep your tasks safe and sync them across all your devices, please create an account or sign in.</p>
-          <div class="auth-required-buttons">
-            <button id="createAccountBtn" class="btn-primary">Create Account</button>
-            <button id="signInExistingBtn" class="btn-secondary">Sign In</button>
-          </div>
-          <div class="auth-benefits">
-            <div class="benefit-item">
-              <span class="benefit-icon">☁️</span>
-              <span>Never lose your tasks</span>
-            </div>
-            <div class="benefit-item">
-              <span class="benefit-icon">📱</span>
-              <span>Sync across devices</span>
-            </div>
-            <div class="benefit-item">
-              <span class="benefit-icon">🔒</span>
-              <span>Secure & private</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+    // Show authentication screen
+    const authScreen = document.getElementById('authRequiredScreen');
+    authScreen.classList.remove('hidden');
     
-    document.querySelector('.taskly-container').innerHTML = authRequiredHtml;
+    // Setup event listeners for auth options
+    document.getElementById('continueAsGuestBtn').addEventListener('click', async () => {
+      await this.selectGuestMode();
+    });
     
-    // Add event listeners for auth buttons
     document.getElementById('createAccountBtn').addEventListener('click', () => {
       this.openLoginPage('signup');
     });
@@ -94,6 +113,24 @@ class TasklyPopup {
     document.getElementById('signInExistingBtn').addEventListener('click', () => {
       this.openLoginPage('signin');
     });
+  }
+
+  async selectGuestMode() {
+    // Set guest mode
+    this.isGuestMode = true;
+    this.isCloudMode = false;
+    await this.initGuestMode();
+    
+    // Hide auth screen and show main interface
+    document.getElementById('authRequiredScreen').classList.add('hidden');
+    document.getElementById('mainView').style.display = 'block';
+    
+    // Initialize the rest of the app
+    await this.loadTasks();
+    this.setupEventListeners();
+    this.updateDisplay();
+    this.displayCurrentDate();
+    this.updateUserInterface();
   }
 
   openLoginPage(mode = 'signin') {
@@ -104,9 +141,146 @@ class TasklyPopup {
   }
 
   updateUserInterface() {
-    // Update user menu to show authenticated user (authentication is mandatory)
-    const userEmail = tasklyAuth.getUserEmail();
-    document.getElementById('userEmail').textContent = userEmail;
+    // Update user menu based on mode
+    const userMenuBtn = document.getElementById('userMenuBtn');
+    const userMenuDropdown = document.getElementById('userMenuDropdown');
+    const userInfo = document.getElementById('userInfo');
+    const guestInfo = document.getElementById('guestInfo');
+    const userEmail = document.getElementById('userEmail');
+    const signOutBtn = document.getElementById('signOutBtn');
+    const upgradeToCloudBtn = document.getElementById('upgradeToCloudBtn');
+
+    // Add user status indicator
+    this.addUserStatusIndicator();
+
+    if (this.isGuestMode) {
+      // Guest mode - show guest info
+      if (userMenuBtn) userMenuBtn.style.display = 'block';
+      if (userMenuDropdown) userMenuDropdown.style.display = 'block';
+      if (userInfo) userInfo.classList.add('hidden');
+      if (guestInfo) guestInfo.classList.remove('hidden');
+      
+      // Add upgrade to cloud functionality
+      if (upgradeToCloudBtn) {
+        upgradeToCloudBtn.addEventListener('click', () => {
+          this.upgradeToCloud();
+        });
+      }
+    } else if (this.isCloudMode) {
+      // Cloud mode - show authenticated user info
+      if (userMenuBtn) userMenuBtn.style.display = 'block';
+      if (userMenuDropdown) userMenuDropdown.style.display = 'block';
+      if (userInfo) userInfo.classList.remove('hidden');
+      if (guestInfo) guestInfo.classList.add('hidden');
+      if (userEmail) userEmail.textContent = tasklyAuth.getUserEmail();
+    }
+  }
+
+  upgradeToCloud() {
+    // Show upgrade options
+    const upgradeHtml = `
+      <div class="upgrade-overlay">
+        <div class="upgrade-content">
+          <h3>Upgrade to Cloud Sync</h3>
+          <p>Save your tasks to the cloud and sync across all your devices.</p>
+          <div class="data-migration-info">
+            <div class="info-item">
+              <span class="info-icon">📤</span>
+              <span>Your existing tasks will be backed up to the cloud</span>
+            </div>
+            <div class="info-item">
+              <span class="info-icon">🔄</span>
+              <span>Future tasks will sync automatically</span>
+            </div>
+          </div>
+          <div class="upgrade-options">
+            <button id="upgradeSignInBtn" class="btn-primary">Sign In to Existing Account</button>
+            <button id="upgradeCreateBtn" class="btn-secondary">Create New Account</button>
+            <button id="upgradeCancelBtn" class="btn-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', upgradeHtml);
+    
+    // Add event listeners
+    document.getElementById('upgradeSignInBtn').addEventListener('click', () => {
+      this.openLoginPage('signin');
+    });
+    
+    document.getElementById('upgradeCreateBtn').addEventListener('click', () => {
+      this.openLoginPage('signup');
+    });
+    
+    document.getElementById('upgradeCancelBtn').addEventListener('click', () => {
+      document.querySelector('.upgrade-overlay').remove();
+    });
+  }
+
+  // Handle successful authentication when upgrading from guest mode
+  async handleSuccessfulAuth(userId) {
+    if (this.isGuestMode) {
+      // User was in guest mode, now authenticated - migrate data
+      const migration = new TasklyMigration();
+      
+      try {
+        migration.showMigrationProgress('Migrating your tasks to the cloud...');
+        
+        const result = await migration.migrateGuestToCloud(userId);
+        
+        if (result.success) {
+          migration.showMigrationProgress(`Successfully migrated ${result.migratedCount} tasks!`);
+          
+          // Switch to cloud mode
+          this.isGuestMode = false;
+          this.isCloudMode = true;
+          this.userId = userId;
+          
+          setTimeout(() => {
+            migration.hideMigrationProgress();
+            // Reload tasks from cloud
+            this.loadTasks();
+            this.updateUserInterface();
+          }, 2000);
+        } else {
+          migration.hideMigrationProgress();
+          console.error('Migration failed:', result.error);
+          // Continue anyway, user can manually re-enter tasks
+        }
+        
+      } catch (error) {
+        migration.hideMigrationProgress();
+        console.error('Migration error:', error);
+      }
+    }
+  }
+
+  addUserStatusIndicator() {
+    // Remove existing indicator
+    const existingIndicator = document.querySelector('.user-status');
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+
+    // Add new status indicator
+    const header = document.querySelector('.taskly-header');
+    const statusIndicator = document.createElement('div');
+    statusIndicator.className = `user-status ${this.isGuestMode ? 'guest' : 'cloud'}`;
+    
+    if (this.isGuestMode) {
+      statusIndicator.innerHTML = `
+        <div class="user-status-icon"></div>
+        <span>Guest Mode</span>
+      `;
+    } else {
+      statusIndicator.innerHTML = `
+        <div class="user-status-icon"></div>
+        <span>Cloud Sync</span>
+      `;
+    }
+    
+    header.appendChild(statusIndicator);
   }
 
   setupEventListeners() {
@@ -164,7 +338,13 @@ class TasklyPopup {
 
   async handleSignOut() {
     try {
-      await tasklyAuth.signOut();
+      if (this.isCloudMode) {
+        await tasklyAuth.signOut();
+      }
+      
+      // Clear guest mode flag as well
+      await chrome.storage.local.remove(['tasklyGuestMode']);
+      
       // Reload the popup to show auth required screen
       window.location.reload();
     } catch (error) {
@@ -175,7 +355,9 @@ class TasklyPopup {
   setupNetworkListeners() {
     window.addEventListener('online', () => {
       this.isOnline = true;
-      this.syncWithCloud();
+      if (this.isCloudMode) {
+        this.syncWithCloud();
+      }
     });
     
     window.addEventListener('offline', () => {
@@ -184,7 +366,7 @@ class TasklyPopup {
   }
 
   async syncWithCloud() {
-    if (!this.isOnline) return;
+    if (!this.isCloudMode || !this.isOnline) return;
     
     try {
       // Sync today's tasks
@@ -219,8 +401,8 @@ class TasklyPopup {
     try {
       const today = new Date().toISOString().split('T')[0];
       
-      if (this.isOnline) {
-        // Try to load from Supabase first
+      if (this.isCloudMode && this.isOnline) {
+        // Cloud mode - try to load from Supabase first
         try {
           await this.ensureUserExists();
           const cloudTasks = await supabase.select('taskly_tasks', {
@@ -243,7 +425,7 @@ class TasklyPopup {
         }
       }
       
-      // Fallback to local storage
+      // Guest mode or fallback - load from local storage
       const result = await chrome.storage.local.get(['tasklyTasks']);
       this.tasks = result.tasklyTasks || [];
       
@@ -278,11 +460,11 @@ class TasklyPopup {
 
   async saveTasks() {
     try {
-      // Always save to local storage first (for offline support)
+      // Always save to local storage first
       await this.saveTasksLocal();
       
-      // If online, sync to cloud
-      if (this.isOnline) {
+      // If cloud mode and online, sync to cloud
+      if (this.isCloudMode && this.isOnline) {
         await this.syncTodaysTasks();
       }
     } catch (error) {
@@ -305,7 +487,7 @@ class TasklyPopup {
   }
 
   async syncTodaysTasks() {
-    if (!this.isOnline) return;
+    if (!this.isCloudMode || !this.isOnline) return;
     
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -490,8 +672,8 @@ class TasklyPopup {
     try {
       let allData = {};
       
-      if (this.isOnline) {
-        // Try to get data from Supabase first
+      if (this.isCloudMode && this.isOnline) {
+        // Cloud mode - try to get data from Supabase first
         try {
           await this.ensureUserExists();
           
@@ -520,7 +702,7 @@ class TasklyPopup {
           allData = await this.getLocalHistoricalData();
         }
       } else {
-        // Use local data when offline
+        // Guest mode or offline - use local data only
         allData = await this.getLocalHistoricalData();
       }
 

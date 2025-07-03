@@ -161,8 +161,9 @@ class TasklyAuth {
     } catch (error) {
       console.error('Error during sign out:', error);
     } finally {
-      // Always clear local session
+      // Always clear local session and any guest mode settings
       await this.clearSession();
+      await chrome.storage.local.remove(['tasklyGuestMode']);
     }
   }
 

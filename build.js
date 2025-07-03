@@ -19,6 +19,7 @@ const SOURCE_FILES = [
   'config.js',
   'supabase.js',
   'auth.js',
+  'migration.js',
   'login.html',
   'login.js',
   'login.css',

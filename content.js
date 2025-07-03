@@ -218,6 +218,7 @@ class TasklyFloatingIcon {
 
   async loadTasks() {
     try {
+      // Load tasks from local storage (works for both guest and cloud modes)
       const result = await chrome.storage.local.get(['tasklyTasks']);
       this.tasks = result.tasklyTasks || [];
       this.renderTasks();
