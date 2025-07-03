@@ -24,6 +24,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Keep the message channel open for async response
+  } else if (request.action === 'refreshPopupData') {
+    // Signal any open popups to refresh their data
+    try {
+      // Use storage to signal refresh needed
+      chrome.storage.local.set({ refreshNeeded: Date.now() });
+      sendResponse({ success: true });
+    } catch (error) {
+      sendResponse({ success: false, error: error.message });
+    }
+  } else if (request.action === 'forcePopupRefresh') {
+    // Force popup to refresh from cloud immediately
+    try {
+      // Method 1: Use storage to signal refresh
+      chrome.storage.local.set({ 
+        forceRefresh: { 
+          timestamp: Date.now(),
+          source: 'bubble'
+        } 
+      });
+      
+      // Method 2: Try to message popup directly (if available)
+      chrome.runtime.sendMessage({ 
+        action: 'forcePopupRefresh' 
+      }).catch(() => {
+        // Ignore errors if popup is not open
+      });
+      
+      sendResponse({ success: true });
+    } catch (error) {
+      sendResponse({ success: false, error: error.message });
+    }
+  } else if (request.action === 'tasksUpdated') {
+    // Update badge when tasks are updated
+    updateBadge();
   }
 });
 

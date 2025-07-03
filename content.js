@@ -326,7 +326,18 @@ class TasklyFloatingIcon {
         tasks: allTasks 
       });
       
-      if (response && !response.success) {
+      if (response && response.success) {
+        console.log('Cloud sync successful:', response.message);
+        
+        // Immediately trigger popup to reload from cloud
+        try {
+          await chrome.runtime.sendMessage({ 
+            action: 'forcePopupRefresh' 
+          });
+        } catch (error) {
+          // Ignore if popup is not open
+        }
+      } else if (response) {
         console.warn('Cloud sync response:', response.message || response.error);
       }
     } catch (error) {
@@ -350,9 +361,31 @@ class TasklyFloatingIcon {
   async notifyMainPopup() {
     try {
       // Send message to background script to update badge
-      await chrome.runtime.sendMessage({ action: 'tasksUpdated' });
+      chrome.runtime.sendMessage({ action: 'tasksUpdated' });
+      
+      // Always set a storage signal for popup to detect changes
+      chrome.storage.local.set({ 
+        tasklyRefreshSignal: Date.now() 
+      });
+      
+      // If in cloud mode, immediately force popup to refresh from cloud
+      if (this.isCloudMode) {
+        // Send force refresh message - don't wait for response
+        chrome.runtime.sendMessage({ 
+          action: 'forcePopupRefresh' 
+        });
+        
+        // Also set a force refresh storage signal for reliability
+        chrome.storage.local.set({ 
+          forceRefresh: { 
+            timestamp: Date.now(),
+            source: 'bubble'
+          } 
+        });
+      }
     } catch (error) {
       // Ignore errors if background script isn't available
+      console.log('Note: Could not notify popup:', error.message);
     }
   }
 
@@ -392,6 +425,8 @@ class TasklyFloatingIcon {
         // If in cloud mode, trigger sync
         if (this.isCloudMode) {
           await this.syncToCloud();
+          // Small delay to ensure sync completes and popup refreshes
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
         
         // Notify main popup of changes
@@ -438,6 +473,8 @@ class TasklyFloatingIcon {
         // If in cloud mode, trigger sync
         if (this.isCloudMode) {
           await this.syncToCloud();
+          // Small delay to ensure sync completes and popup refreshes
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
         
         this.notifyMainPopup();

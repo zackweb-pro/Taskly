@@ -56,13 +56,73 @@ class SupabaseClient {
       
       signOut: async () => {
         try {
-          await tasklyAuth.signOut();
+          if (typeof tasklyAuth !== 'undefined') {
+            await tasklyAuth.signOut();
+          }
           return { error: null };
         } catch (error) {
           return { error: error };
         }
       }
     };
+  }
+
+  // Update auth headers with fresh token
+  async updateAuthHeaders() {
+    try {
+      if (typeof tasklyAuth !== 'undefined' && tasklyAuth.isLoggedIn()) {
+        const session = await tasklyAuth.getStoredSession();
+        if (session && session.access_token) {
+          this.headers['Authorization'] = `Bearer ${session.access_token}`;
+          return true;
+        }
+      }
+      // Fall back to service key if no user session
+      this.headers['Authorization'] = `Bearer ${this.key}`;
+      return false;
+    } catch (error) {
+      console.error('Error updating auth headers:', error);
+      this.headers['Authorization'] = `Bearer ${this.key}`;
+      return false;
+    }
+  }
+
+  // Make authenticated request with automatic token refresh
+  async makeRequest(url, options) {
+    // Update auth headers before each request
+    await this.updateAuthHeaders();
+    
+    let response = await fetch(url, {
+      ...options,
+      headers: { ...this.headers, ...options.headers }
+    });
+
+    // If we get a 401, try to refresh the token and retry once
+    if (response.status === 401) {
+      console.log('Token expired, attempting to refresh...');
+      
+      // Try to refresh the session
+      if (typeof tasklyAuth !== 'undefined') {
+        try {
+          await tasklyAuth.refreshSession();
+          await this.updateAuthHeaders();
+          
+          // Retry the request with refreshed token
+          response = await fetch(url, {
+            ...options,
+            headers: { ...this.headers, ...options.headers }
+          });
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          // If refresh fails, user needs to re-authenticate
+          if (typeof tasklyAuth !== 'undefined') {
+            tasklyAuth.signOut();
+          }
+        }
+      }
+    }
+
+    return response;
   }
 
   // Helper method to safely parse response
@@ -112,10 +172,8 @@ class SupabaseClient {
   // Insert data into a table
   async insert(table, data) {
     try {
-      const headers = await this.getAuthHeaders();
-      const response = await fetch(`${this.url}/rest/v1/${table}`, {
+      const response = await this.makeRequest(`${this.url}/rest/v1/${table}`, {
         method: 'POST',
-        headers: headers,
         body: JSON.stringify(data)
       });
 
@@ -155,9 +213,8 @@ class SupabaseClient {
         url += '?' + params.toString();
       }
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: this.headers
+      const response = await this.makeRequest(url, {
+        method: 'GET'
       });
 
       if (!response.ok) {
@@ -189,9 +246,8 @@ class SupabaseClient {
         url += '?' + params.toString();
       }
 
-      const response = await fetch(url, {
+      const response = await this.makeRequest(url, {
         method: 'PATCH',
-        headers: this.headers,
         body: JSON.stringify(data)
       });
 
@@ -224,9 +280,8 @@ class SupabaseClient {
         url += '?' + params.toString();
       }
 
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers: this.headers
+      const response = await this.makeRequest(url, {
+        method: 'DELETE'
       });
 
       if (!response.ok) {
@@ -266,9 +321,8 @@ class SupabaseClient {
                   
                   url += '?' + params.join('&');
 
-                  const response = await fetch(url, {
-                    method: 'GET',
-                    headers: headers
+                  const response = await client.makeRequest(url, {
+                    method: 'GET'
                   });
 
                   if (!response.ok) {
@@ -290,10 +344,8 @@ class SupabaseClient {
 
       insert: async function(data) {
         try {
-          const headers = await client.getAuthHeaders();
-          const response = await fetch(`${client.url}/rest/v1/${table}`, {
+          const response = await client.makeRequest(`${client.url}/rest/v1/${table}`, {
             method: 'POST',
-            headers: headers,
             body: JSON.stringify(Array.isArray(data) ? data : [data])
           });
 
@@ -314,6 +366,31 @@ class SupabaseClient {
         return {
           eq: function(column, value) {
             return {
+              eq: function(column2, value2) {
+                return {
+                  async then(resolve, reject) {
+                    try {
+                      const headers = await client.getAuthHeaders();
+                      const response = await fetch(`${client.url}/rest/v1/${table}?${column}=eq.${value}&${column2}=eq.${value2}`, {
+                        method: 'PATCH',
+                        headers: headers,
+                        body: JSON.stringify(data)
+                      });
+
+                      if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                      }
+
+                      const result = await client.parseResponse(response, data);
+                      resolve({ data: result, error: null });
+                    } catch (error) {
+                      console.error('Supabase update error:', error);
+                      reject({ data: null, error: error });
+                    }
+                  }
+                };
+              },
               async then(resolve, reject) {
                 try {
                   const headers = await client.getAuthHeaders();

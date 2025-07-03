@@ -47,6 +47,12 @@ class TasklyPopup {
 
     // Check for pending cloud sync from content script
     await this.handlePendingCloudSync();
+    
+    // Set up listener for refresh signals from content script
+    this.setupRefreshListener();
+    
+    // Check for pending refresh signals immediately
+    await this.checkPendingRefreshSignals();
   }
 
   async checkUserMode() {
@@ -161,7 +167,7 @@ class TasklyPopup {
 
       // Get current tasks from database
       const { data: dbTasks, error: fetchError } = await window.supabase
-        .from('tasks')
+        .from('taskly_tasks')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -170,10 +176,10 @@ class TasklyPopup {
         throw new Error(`Failed to fetch tasks: ${fetchError.message}`);
       }
 
-      // Create a map of existing tasks by ID for quick lookup
+      // Create a map of existing tasks by task_id for quick lookup (not id)
       const dbTaskMap = new Map();
       (dbTasks || []).forEach(task => {
-        dbTaskMap.set(task.id, task);
+        dbTaskMap.set(task.task_id, task);
       });
 
       // Process tasks for sync
@@ -181,41 +187,31 @@ class TasklyPopup {
       const tasksToUpdate = [];
 
       for (const task of tasks) {
-        const dbTask = dbTaskMap.get(task.id);
+        const dbTask = dbTaskMap.get(task.id); // Use task.id to match task_id in db
         
         if (!dbTask) {
-          // New task - insert it
+          // New task - insert it with proper mapping for taskly_tasks table
+          const taskDate = new Date(task.dateCreated).toISOString().split('T')[0]; // Get YYYY-MM-DD format
           tasksToInsert.push({
-            id: task.id,
             user_id: user.id,
-            title: task.title || task.text, // Handle both title and text fields
-            description: task.description || '',
+            task_id: task.id, // Map to task_id column
+            text: task.text, // Use text field as it exists in taskly_tasks
             completed: task.completed || false,
             date_created: task.dateCreated,
-            date_completed: task.dateCompleted || null,
-            category: task.category || 'Personal',
-            priority: task.priority || 'Medium',
-            tags: task.tags || []
+            task_date: taskDate // Required field in your schema
           });
         } else {
           // Check if task needs updating
           const needsUpdate = 
-            (task.title || task.text) !== dbTask.title ||
-            task.completed !== dbTask.completed ||
-            (task.description || '') !== (dbTask.description || '') ||
-            (task.category || 'Personal') !== (dbTask.category || 'Personal') ||
-            (task.priority || 'Medium') !== (dbTask.priority || 'Medium');
+            task.text !== dbTask.text ||
+            task.completed !== dbTask.completed;
           
           if (needsUpdate) {
             tasksToUpdate.push({
-              id: task.id,
-              title: task.title || task.text,
-              description: task.description || '',
+              task_id: task.id,
+              text: task.text,
               completed: task.completed || false,
-              date_completed: task.dateCompleted || null,
-              category: task.category || 'Personal',
-              priority: task.priority || 'Medium',
-              tags: task.tags || []
+              date_created: task.dateCreated
             });
           }
         }
@@ -228,7 +224,7 @@ class TasklyPopup {
       // Insert new tasks
       if (tasksToInsert.length > 0) {
         const { error } = await window.supabase
-          .from('tasks')
+          .from('taskly_tasks')
           .insert(tasksToInsert);
         
         if (error) {
@@ -240,9 +236,9 @@ class TasklyPopup {
       // Update existing tasks
       for (const taskUpdate of tasksToUpdate) {
         const { error } = await window.supabase
-          .from('tasks')
+          .from('taskly_tasks')
           .update(taskUpdate)
-          .eq('id', taskUpdate.id)
+          .eq('task_id', taskUpdate.task_id) // Use task_id instead of id
           .eq('user_id', user.id);
         
         if (error) {
@@ -262,6 +258,76 @@ class TasklyPopup {
     } catch (error) {
       console.error('Error syncing tasks to cloud:', error);
       throw error;
+    }
+  }
+
+  // Set up listener for refresh signals from content script  
+  setupRefreshListener() {
+    // Listen for storage changes that signal a refresh is needed
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+      if (namespace === 'local') {
+        // Handle refresh signals
+        if (changes.tasklyRefreshSignal) {
+          console.log('Refresh signal received from content script');
+          this.loadTasks();
+        }
+        
+        // Handle force refresh (immediate cloud reload)
+        if (changes.forceRefresh && this.isCloudMode) {
+          console.log('Force refresh signal received - reloading from cloud');
+          this.loadTasksFromCloud();
+        }
+      }
+    });
+
+    // Listen for messages from background script AND content script
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      console.log('Popup received message:', message);
+      
+      if (message.action === 'refreshPopupData') {
+        console.log('Refresh message received - reloading tasks');
+        this.loadTasks();
+        sendResponse({ success: true });
+      } else if (message.action === 'forcePopupRefresh') {
+        console.log('Force refresh message received - reloading from cloud immediately');
+        if (this.isCloudMode) {
+          this.loadTasksFromCloud().then(() => {
+            sendResponse({ success: true });
+          }).catch(error => {
+            console.error('Error in force refresh:', error);
+            sendResponse({ success: false, error: error.message });
+          });
+        } else {
+          this.loadTasks();
+          sendResponse({ success: true });
+        }
+        return true; // Keep message channel open for async response
+      }
+    });
+  }
+
+  // Check for pending refresh signals when popup opens
+  async checkPendingRefreshSignals() {
+    try {
+      const result = await chrome.storage.local.get(['tasklyRefreshSignal', 'forceRefresh']);
+      
+      // Check for refresh signal from content script
+      if (result.tasklyRefreshSignal) {
+        console.log('Found pending refresh signal - reloading tasks');
+        await this.loadTasks();
+        // Clear the signal
+        await chrome.storage.local.remove(['tasklyRefreshSignal']);
+      }
+      
+      // Check for force refresh (cloud reload)
+      if (result.forceRefresh && this.isCloudMode) {
+        console.log('Found pending force refresh signal - reloading from cloud');
+        await this.loadTasksFromCloud();
+        // Clear the signal
+        await chrome.storage.local.remove(['forceRefresh']);
+      }
+    } catch (error) {
+      console.error('Error checking pending refresh signals:', error);
     }
   }
 
@@ -715,6 +781,44 @@ class TasklyPopup {
     } catch (error) {
       console.error('Error syncing with cloud:', error);
       throw error;
+    }
+  }
+
+  // Force load tasks from cloud (bypasses local storage)
+  async loadTasksFromCloud() {
+    if (!this.isCloudMode || !this.isOnline) {
+      console.log('Cloud reload not possible - not in cloud mode or offline');
+      return;
+    }
+
+    try {
+      console.log('Force loading tasks from cloud...');
+      const today = new Date().toISOString().split('T')[0];
+      
+      await this.ensureUserExists();
+      const cloudTasks = await window.supabase.select('taskly_tasks', {
+        eq: { user_id: this.userId, task_date: today },
+        order: 'created_at.desc'
+      });
+      
+      this.tasks = cloudTasks.map(task => ({
+        id: task.task_id,
+        text: task.text,
+        completed: task.completed,
+        dateCreated: task.date_created
+      }));
+      
+      // Update local storage with fresh cloud data
+      await this.saveTasksLocal();
+      
+      // Update UI
+      this.updateDisplay();
+      
+      console.log('Successfully loaded fresh data from cloud');
+    } catch (error) {
+      console.error('Failed to force load from cloud:', error);
+      // Fall back to regular loadTasks
+      this.loadTasks();
     }
   }
 
