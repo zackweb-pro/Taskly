@@ -60,7 +60,7 @@ class TasklyAuth {
     }
   }
 
-  // Sign up with email and password
+  // Sign up with email and password (no email confirmation required)
   async signUp(email, password) {
     try {
       // Ensure supabase is initialized
@@ -77,30 +77,91 @@ class TasklyAuth {
         },
         body: JSON.stringify({
           email: email,
-          password: password,
-          options: {
-            emailRedirectTo: chrome.runtime.getURL('login.html')
-          }
+          password: password
+          // No emailRedirectTo needed since confirmation is disabled
         })
       });
 
       const data = await response.json();
       console.log('Signup response:', data); // Debug log
 
-      if (response.ok && data.user) {
-        // Store session if provided (immediate confirmation disabled)
-        if (data.session) {
+      if (response.ok) {
+        // With email confirmation disabled, user should be immediately available
+        if (data.user && data.session && data.session.access_token) {
+          // User is immediately signed up and signed in
           await this.storeSession(data.session);
           this.currentUser = data.user;
           this.isAuthenticated = true;
+          return { success: true, user: data.user, needsConfirmation: false };
+        } else if (data.user) {
+          // User created but no session - this shouldn't happen with confirmation disabled
+          // Try to sign them in immediately
+          const signInResult = await this.signIn(email, password);
+          if (signInResult.success) {
+            return { success: true, user: signInResult.user, needsConfirmation: false };
+          } else {
+            return { success: true, user: data.user, needsConfirmation: true, message: 'Account created. Please sign in.' };
+          }
+        } else {
+          // Unexpected response structure
+          return { success: false, error: 'Unexpected response from server. Please try signing in.' };
         }
-        return { success: true, user: data.user, needsConfirmation: !data.session };
       } else {
-        return { success: false, error: data.error_description || data.msg || data.message || 'Sign up failed' };
+        // Handle different error cases
+        let errorMessage = 'Sign up failed';
+        
+        if (data.error_description) {
+          errorMessage = data.error_description;
+        } else if (data.msg) {
+          errorMessage = data.msg;
+        } else if (data.message) {
+          errorMessage = data.message;
+        } else if (data.error) {
+          errorMessage = data.error;
+        }
+        
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error('Sign up error:', error);
       return { success: false, error: error.message || 'Network error during sign up' };
+    }
+  }
+
+  // Alternative signup method without email confirmation (for development)
+  async signUpInstant(email, password) {
+    try {
+      // First create the user with confirmation disabled
+      const response = await fetch(`${supabase.url}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabase.key,
+          'Authorization': `Bearer ${supabase.key}` // Note: This requires service role key for admin operations
+        },
+        body: JSON.stringify({
+          email: email,
+          password: password,
+          email_confirm: true, // Auto-confirm email
+          user_metadata: {
+            signup_method: 'extension'
+          }
+        })
+      });
+
+      const data = await response.json();
+      console.log('Instant signup response:', data);
+
+      if (response.ok && data.user) {
+        // Now sign in the user immediately
+        return await this.signIn(email, password);
+      } else {
+        // Fall back to regular signup
+        return await this.signUp(email, password);
+      }
+    } catch (error) {
+      console.error('Instant signup failed, falling back to regular signup:', error);
+      return await this.signUp(email, password);
     }
   }
 

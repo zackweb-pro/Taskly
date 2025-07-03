@@ -151,9 +151,14 @@ async function handleSignUp(e) {
             await chrome.storage.local.remove(['tasklyGuestMode']);
             
             if (result.needsConfirmation) {
-                showStatus('Account created! Please check your email to confirm your account. After confirmation, close this tab and click the Taskly extension icon.', 'success');
+                showStatus('Account created! Please sign in with your credentials.', 'success');
+                // Switch to sign in form
+                setTimeout(() => {
+                    showForm('signIn');
+                    document.getElementById('signInEmail').value = email;
+                }, 1500);
             } else {
-                showStatus('Account created successfully! Redirecting...', 'success');
+                showStatus('Account created and signed in! Redirecting...', 'success');
                 setTimeout(async () => {
                     try {
                         // Try to close current tab and open extension

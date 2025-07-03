@@ -20,6 +20,7 @@ const SOURCE_FILES = [
   'supabase.js',
   'auth.js',
   'migration.js',
+  'url-detector.js',
   'login.html',
   'login.js',
   'login.css',
