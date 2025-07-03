@@ -88,10 +88,27 @@ class TasklyPopup {
 
   async initCloudMode() {
     console.log('Initializing cloud mode');
+    
+    // Check if Supabase is properly configured
+    if (!window.supabase) {
+      console.warn('Supabase client not available - falling back to guest mode');
+      this.isCloudMode = false;
+      this.isGuestMode = true;
+      await chrome.storage.local.set({ tasklyGuestMode: true });
+      return;
+    }
+    
     // Clear guest mode flag and ensure user exists in database
     await chrome.storage.local.remove(['tasklyGuestMode']);
     if (this.isOnline) {
-      await this.ensureUserExists();
+      try {
+        await this.ensureUserExists();
+      } catch (error) {
+        console.warn('Failed to connect to Supabase - falling back to guest mode:', error);
+        this.isCloudMode = false;
+        this.isGuestMode = true;
+        await chrome.storage.local.set({ tasklyGuestMode: true });
+      }
     }
   }
 
@@ -119,7 +136,8 @@ class TasklyPopup {
   // Sync specific tasks to cloud (for background script usage)
   async syncTasksToCloud(tasks) {
     if (!this.isCloudMode || !this.isOnline) {
-      throw new Error('Cloud sync not available - not in cloud mode or offline');
+      console.warn('Skipping cloud sync - not in cloud mode or offline');
+      return { success: false, message: 'Not in cloud mode or offline' };
     }
 
     try {
@@ -130,7 +148,8 @@ class TasklyPopup {
           window.initializeSupabase();
         }
         if (!window.supabase) {
-          throw new Error('Supabase client not available');
+          console.warn('Supabase client not available - check configuration');
+          return { success: false, message: 'Supabase not configured' };
         }
       }
 

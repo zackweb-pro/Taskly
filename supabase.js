@@ -12,6 +12,57 @@ class SupabaseClient {
       'Authorization': `Bearer ${key}`,
       'Prefer': 'return=minimal' // This tells Supabase to return minimal response for writes
     };
+    
+    // Add auth interface to match standard Supabase client
+    this.auth = {
+      getUser: async () => {
+        try {
+          if (typeof tasklyAuth !== 'undefined' && tasklyAuth.isLoggedIn()) {
+            const session = await tasklyAuth.getStoredSession();
+            if (session && session.user) {
+              return {
+                data: { user: session.user },
+                error: null
+              };
+            }
+          }
+          return {
+            data: { user: null },
+            error: { message: 'User not authenticated' }
+          };
+        } catch (error) {
+          return {
+            data: { user: null },
+            error: error
+          };
+        }
+      },
+      
+      signInWithPassword: async (credentials) => {
+        try {
+          return await tasklyAuth.signIn(credentials.email, credentials.password);
+        } catch (error) {
+          return { data: null, error: error };
+        }
+      },
+      
+      signUp: async (credentials) => {
+        try {
+          return await tasklyAuth.signUp(credentials.email, credentials.password);
+        } catch (error) {
+          return { data: null, error: error };
+        }
+      },
+      
+      signOut: async () => {
+        try {
+          await tasklyAuth.signOut();
+          return { error: null };
+        } catch (error) {
+          return { error: error };
+        }
+      }
+    };
   }
 
   // Helper method to safely parse response
@@ -190,6 +241,106 @@ class SupabaseClient {
       throw error;
     }
   }
+
+  // Supabase-style query builder interface
+  from(table) {
+    const client = this;
+    
+    return {
+      select: function(columns = '*') {
+        return {
+          eq: function(column, value) {
+            return {
+              order: async function(orderBy, options = {}) {
+                try {
+                  const headers = await client.getAuthHeaders();
+                  const direction = options.ascending === false ? 'desc' : 'asc';
+                  let url = `${client.url}/rest/v1/${table}`;
+                  
+                  const params = [];
+                  if (columns !== '*') {
+                    params.push(`select=${columns}`);
+                  }
+                  params.push(`${column}=eq.${value}`);
+                  params.push(`order=${orderBy}.${direction}`);
+                  
+                  url += '?' + params.join('&');
+
+                  const response = await fetch(url, {
+                    method: 'GET',
+                    headers: headers
+                  });
+
+                  if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                  }
+
+                  const result = await client.parseResponse(response, []);
+                  return { data: result, error: null };
+                } catch (error) {
+                  console.error('Supabase select error:', error);
+                  return { data: null, error: error };
+                }
+              }
+            };
+          }
+        };
+      },
+
+      insert: async function(data) {
+        try {
+          const headers = await client.getAuthHeaders();
+          const response = await fetch(`${client.url}/rest/v1/${table}`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(Array.isArray(data) ? data : [data])
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+          }
+
+          const result = await client.parseResponse(response, data);
+          return { data: result, error: null };
+        } catch (error) {
+          console.error('Supabase insert error:', error);
+          return { data: null, error: error };
+        }
+      },
+
+      update: function(data) {
+        return {
+          eq: function(column, value) {
+            return {
+              async then(resolve, reject) {
+                try {
+                  const headers = await client.getAuthHeaders();
+                  const response = await fetch(`${client.url}/rest/v1/${table}?${column}=eq.${value}`, {
+                    method: 'PATCH',
+                    headers: headers,
+                    body: JSON.stringify(data)
+                  });
+
+                  if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                  }
+
+                  const result = await client.parseResponse(response, data);
+                  resolve({ data: result, error: null });
+                } catch (error) {
+                  console.error('Supabase update error:', error);
+                  reject({ data: null, error: error });
+                }
+              }
+            };
+          }
+        };
+      }
+    };
+  }
 }
 
 // Create and export the Supabase client instance
@@ -201,12 +352,14 @@ function initializeSupabase() {
   if (typeof config !== 'undefined') {
     const { supabaseUrl, supabaseKey } = config.getConfig();
     if (supabaseUrl && supabaseKey && 
+        !supabaseUrl.includes('YOUR_SUPABASE_URL_HERE') && 
+        !supabaseKey.includes('YOUR_SUPABASE_ANON_KEY_HERE') &&
         !supabaseUrl.includes('__SUPABASE_URL__') && 
         !supabaseKey.includes('__SUPABASE_ANON_KEY__')) {
       supabase = new SupabaseClient(supabaseUrl, supabaseKey);
       console.log('Supabase client initialized successfully');
     } else {
-      console.warn('Supabase credentials are not properly configured');
+      console.warn('Supabase credentials are not properly configured. Please update config.js with your actual Supabase URL and anon key.');
     }
   } else {
     console.error('Config not loaded. Make sure config.js is included before supabase.js');

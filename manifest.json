@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Taskly",
+  "name": "Taskly - Smart To-Do List",
   "version": "1.0.0",
-  "description": "Your Daily To-Do, Always Within Reach",
+  "description": "Floating to-do list with cloud sync. Access tasks on any website with a single click. Guest mode available - no account required!",
   "permissions": [
     "storage",
     "activeTab",
     "tabs"
   ],
   "host_permissions": [
-    "https://mksxrwldbhknicbbmssz.supabase.co/*"
+    "https://YOUR_SUPABASE_PROJECT_ID.supabase.co/*"
   ],
   "content_scripts": [
     {
