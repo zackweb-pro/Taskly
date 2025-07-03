@@ -1,6 +1,6 @@
 # Taskly - Privacy Policy
 
-**Last Updated:** [Current Date]
+**Last Updated:** 03 July 2025
 
 ## 🔒 Privacy at a Glance
 
@@ -99,6 +99,7 @@ We may update this privacy policy occasionally. Changes will be posted here with
 ### Permissions Used
 - **Storage:** Save tasks and preferences locally
 - **ActiveTab:** Display floating task bubble on websites
+- **Identity:** The identity permission is used for user authentication in cloud sync mode (cloud mode only)
 - **Host Permissions:** Communicate with Supabase for cloud sync (cloud mode only)
 
 ### No Excessive Permissions
@@ -108,7 +109,7 @@ Taskly requests only the minimum permissions necessary for functionality. We do 
 
 Questions about this privacy policy or your data?
 
-- **Email:** [your-email@domain.com]
+- **Email:** [webzack0@gmail.com]
 - **Extension Support:** Use the Chrome Web Store support section
 - **Data Requests:** Email us with "Data Request" in the subject line
 
