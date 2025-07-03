@@ -44,6 +44,9 @@ class TasklyPopup {
         this.syncWithCloud();
       }
     }
+
+    // Check for pending cloud sync from content script
+    await this.handlePendingCloudSync();
   }
 
   async checkUserMode() {
@@ -89,6 +92,157 @@ class TasklyPopup {
     await chrome.storage.local.remove(['tasklyGuestMode']);
     if (this.isOnline) {
       await this.ensureUserExists();
+    }
+  }
+
+  // Handle pending cloud sync from background script
+  async handlePendingCloudSync() {
+    try {
+      const result = await chrome.storage.local.get(['pendingCloudSync']);
+      if (result.pendingCloudSync) {
+        const { tasks, timestamp } = result.pendingCloudSync;
+        
+        // Only process if the sync request is recent (within 5 minutes)
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          console.log('Processing pending cloud sync from content script');
+          await this.syncTasksToCloud(tasks);
+        }
+        
+        // Clear the pending sync
+        await chrome.storage.local.remove(['pendingCloudSync']);
+      }
+    } catch (error) {
+      console.error('Error handling pending cloud sync:', error);
+    }
+  }
+
+  // Sync specific tasks to cloud (for background script usage)
+  async syncTasksToCloud(tasks) {
+    if (!this.isCloudMode || !this.isOnline) {
+      throw new Error('Cloud sync not available - not in cloud mode or offline');
+    }
+
+    try {
+      // Ensure supabase client is available
+      if (!window.supabase) {
+        // Try to initialize it
+        if (window.initializeSupabase) {
+          window.initializeSupabase();
+        }
+        if (!window.supabase) {
+          throw new Error('Supabase client not available');
+        }
+      }
+
+      // Get current user
+      const { data: { user }, error: userError } = await window.supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Get current tasks from database
+      const { data: dbTasks, error: fetchError } = await window.supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (fetchError) {
+        throw new Error(`Failed to fetch tasks: ${fetchError.message}`);
+      }
+
+      // Create a map of existing tasks by ID for quick lookup
+      const dbTaskMap = new Map();
+      (dbTasks || []).forEach(task => {
+        dbTaskMap.set(task.id, task);
+      });
+
+      // Process tasks for sync
+      const tasksToInsert = [];
+      const tasksToUpdate = [];
+
+      for (const task of tasks) {
+        const dbTask = dbTaskMap.get(task.id);
+        
+        if (!dbTask) {
+          // New task - insert it
+          tasksToInsert.push({
+            id: task.id,
+            user_id: user.id,
+            title: task.title || task.text, // Handle both title and text fields
+            description: task.description || '',
+            completed: task.completed || false,
+            date_created: task.dateCreated,
+            date_completed: task.dateCompleted || null,
+            category: task.category || 'Personal',
+            priority: task.priority || 'Medium',
+            tags: task.tags || []
+          });
+        } else {
+          // Check if task needs updating
+          const needsUpdate = 
+            (task.title || task.text) !== dbTask.title ||
+            task.completed !== dbTask.completed ||
+            (task.description || '') !== (dbTask.description || '') ||
+            (task.category || 'Personal') !== (dbTask.category || 'Personal') ||
+            (task.priority || 'Medium') !== (dbTask.priority || 'Medium');
+          
+          if (needsUpdate) {
+            tasksToUpdate.push({
+              id: task.id,
+              title: task.title || task.text,
+              description: task.description || '',
+              completed: task.completed || false,
+              date_completed: task.dateCompleted || null,
+              category: task.category || 'Personal',
+              priority: task.priority || 'Medium',
+              tags: task.tags || []
+            });
+          }
+        }
+      }
+
+      // Perform batch operations
+      let insertCount = 0;
+      let updateCount = 0;
+
+      // Insert new tasks
+      if (tasksToInsert.length > 0) {
+        const { error } = await window.supabase
+          .from('tasks')
+          .insert(tasksToInsert);
+        
+        if (error) {
+          throw new Error(`Failed to insert tasks: ${error.message}`);
+        }
+        insertCount = tasksToInsert.length;
+      }
+
+      // Update existing tasks
+      for (const taskUpdate of tasksToUpdate) {
+        const { error } = await window.supabase
+          .from('tasks')
+          .update(taskUpdate)
+          .eq('id', taskUpdate.id)
+          .eq('user_id', user.id);
+        
+        if (error) {
+          console.error(`Failed to update task ${taskUpdate.id}:`, error);
+        } else {
+          updateCount++;
+        }
+      }
+
+      console.log(`Cloud sync completed: ${insertCount} inserted, ${updateCount} updated`);
+      return {
+        success: true,
+        inserted: insertCount,
+        updated: updateCount
+      };
+
+    } catch (error) {
+      console.error('Error syncing tasks to cloud:', error);
+      throw error;
     }
   }
 
@@ -405,7 +559,7 @@ class TasklyPopup {
         // Cloud mode - try to load from Supabase first
         try {
           await this.ensureUserExists();
-          const cloudTasks = await supabase.select('taskly_tasks', {
+          const cloudTasks = await window.supabase.select('taskly_tasks', {
             eq: { user_id: this.userId, task_date: today },
             order: 'created_at.desc'
           });
@@ -443,13 +597,13 @@ class TasklyPopup {
   async ensureUserExists() {
     try {
       // Check if user exists in database
-      const existingUsers = await supabase.select('taskly_users', {
+      const existingUsers = await window.supabase.select('taskly_users', {
         eq: { user_id: this.userId }
       });
       
       if (existingUsers.length === 0) {
         // Create user record
-        await supabase.insert('taskly_users', {
+        await window.supabase.insert('taskly_users', {
           user_id: this.userId
         });
       }
@@ -493,7 +647,7 @@ class TasklyPopup {
       const today = new Date().toISOString().split('T')[0];
       
       // Get existing tasks from cloud for today
-      const existingTasks = await supabase.select('taskly_tasks', {
+      const existingTasks = await window.supabase.select('taskly_tasks', {
         eq: { user_id: this.userId, task_date: today }
       });
       
@@ -507,7 +661,7 @@ class TasklyPopup {
         if (cloudTask) {
           // Update existing task if different
           if (cloudTask.text !== task.text || cloudTask.completed !== task.completed) {
-            await supabase.update('taskly_tasks', 
+            await window.supabase.update('taskly_tasks', 
               {
                 text: task.text,
                 completed: task.completed,
@@ -521,7 +675,7 @@ class TasklyPopup {
           cloudTasksMap.delete(task.id); // Mark as processed
         } else {
           // Insert new task
-          await supabase.insert('taskly_tasks', {
+          await window.supabase.insert('taskly_tasks', {
             user_id: this.userId,
             task_id: task.id,
             text: task.text,
@@ -534,7 +688,7 @@ class TasklyPopup {
       
       // Delete tasks that exist in cloud but not locally (were deleted locally)
       for (const [taskId] of cloudTasksMap) {
-        await supabase.delete('taskly_tasks', {
+        await window.supabase.delete('taskly_tasks', {
           eq: { user_id: this.userId, task_id: taskId, task_date: today }
         });
       }
@@ -678,7 +832,7 @@ class TasklyPopup {
           await this.ensureUserExists();
           
           // Get all tasks for this user
-          const cloudTasks = await supabase.select('taskly_tasks', {
+          const cloudTasks = await window.supabase.select('taskly_tasks', {
             eq: { user_id: this.userId },
             order: 'task_date.desc'
           });

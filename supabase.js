@@ -200,7 +200,14 @@ let supabase = null;
 function initializeSupabase() {
   if (typeof config !== 'undefined') {
     const { supabaseUrl, supabaseKey } = config.getConfig();
-    supabase = new SupabaseClient(supabaseUrl, supabaseKey);
+    if (supabaseUrl && supabaseKey && 
+        !supabaseUrl.includes('__SUPABASE_URL__') && 
+        !supabaseKey.includes('__SUPABASE_ANON_KEY__')) {
+      supabase = new SupabaseClient(supabaseUrl, supabaseKey);
+      console.log('Supabase client initialized successfully');
+    } else {
+      console.warn('Supabase credentials are not properly configured');
+    }
   } else {
     console.error('Config not loaded. Make sure config.js is included before supabase.js');
   }

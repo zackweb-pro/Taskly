@@ -1,13 +1,48 @@
-// Taskly Content Script - Floating Icon and Popup
+// Taskly Content Script - Floating Icon and Popup with Dual Storage Support
 class TasklyFloatingIcon {
   constructor() {
     this.isVisible = false;
     this.isPopupOpen = false;
     this.tasks = [];
+    this.isGuestMode = false;
+    this.isCloudMode = false;
     this.createFloatingIcon();
     this.createFloatingPopup();
     this.setupEventListeners();
-    this.loadTasks();
+    this.initializeMode();
+  }
+
+  async initializeMode() {
+    try {
+      // Check user mode (guest vs authenticated)
+      const guestMode = await chrome.storage.local.get(['tasklyGuestMode']);
+      this.isGuestMode = guestMode.tasklyGuestMode === true;
+      this.isCloudMode = !this.isGuestMode;
+      
+      console.log('Content script mode:', this.isGuestMode ? 'Guest' : 'Cloud');
+      
+      // Load tasks after determining mode
+      await this.loadTasks();
+      
+      // Listen for storage changes to keep in sync with main popup
+      this.setupStorageListener();
+    } catch (error) {
+      console.error('Error initializing mode:', error);
+      // Default to guest mode if there's an error
+      this.isGuestMode = true;
+      this.isCloudMode = false;
+      await this.loadTasks();
+    }
+  }
+
+  setupStorageListener() {
+    // Listen for changes to task storage
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+      if (namespace === 'local' && changes.tasklyTasks) {
+        // Tasks were updated in the main popup, refresh our view
+        this.loadTasks();
+      }
+    });
   }
 
   createFloatingIcon() {
@@ -86,9 +121,9 @@ class TasklyFloatingIcon {
     if (!this.iconContainer) return;
 
     // Icon click event
-    this.iconContainer.addEventListener('click', (e) => {
+    this.iconContainer.addEventListener('click', async (e) => {
       e.stopPropagation();
-      this.togglePopup();
+      await this.togglePopup();
     });
 
     // Close popup when clicking outside
@@ -145,15 +180,15 @@ class TasklyFloatingIcon {
     });
   }
 
-  togglePopup() {
+  async togglePopup() {
     if (this.isPopupOpen) {
       this.closePopup();
     } else {
-      this.openPopup();
+      await this.openPopup();
     }
   }
 
-  openPopup() {
+  async openPopup() {
     // Prevent page scrolling more robustly
     const currentScrollY = window.scrollY;
     const currentScrollX = window.scrollX;
@@ -200,8 +235,8 @@ class TasklyFloatingIcon {
       input.focus({ preventScroll: true });
     }, 300);
     
-    // Load and render tasks
-    this.loadTasks();
+    // Load and render tasks (refresh from storage)
+    await this.loadTasks();
   }
 
   closePopup() {
@@ -218,27 +253,110 @@ class TasklyFloatingIcon {
 
   async loadTasks() {
     try {
-      // Load tasks from local storage (works for both guest and cloud modes)
+      // Always load from local storage (works for both guest and cloud modes)
+      // The main popup handles cloud sync, content script just reads local cache
       const result = await chrome.storage.local.get(['tasklyTasks']);
       this.tasks = result.tasklyTasks || [];
+      
+      // Filter for today's tasks only
+      const today = new Date().toDateString();
+      this.tasks = this.tasks.filter(task => {
+        const taskDate = new Date(task.dateCreated).toDateString();
+        return taskDate === today;
+      });
+      
       this.renderTasks();
       this.updateTaskCount();
     } catch (error) {
-      console.log('Error loading tasks:', error);
+      console.log('Error loading tasks in content script:', error);
       this.tasks = [];
     }
   }
 
   async saveTasks() {
     try {
-      await chrome.storage.local.set({ tasklyTasks: this.tasks });
+      // Get all tasks from storage first
+      const result = await chrome.storage.local.get(['tasklyTasks']);
+      const allTasks = result.tasklyTasks || [];
+      
+      // Update the all tasks array with our current tasks
+      const today = new Date().toDateString();
+      
+      // Remove today's tasks from allTasks
+      const otherDaysTasks = allTasks.filter(task => {
+        const taskDate = new Date(task.dateCreated).toDateString();
+        return taskDate !== today;
+      });
+      
+      // Combine with today's tasks
+      const updatedAllTasks = [...otherDaysTasks, ...this.tasks];
+      
+      // Save to local storage
+      await chrome.storage.local.set({ tasklyTasks: updatedAllTasks });
       this.updateTaskCount();
+      
+      // Also save to historical data with date key for stats
+      const todayIso = new Date().toISOString().split('T')[0];
+      const historicalKey = `tasklyTasks_${todayIso}`;
+      await chrome.storage.local.set({ [historicalKey]: updatedAllTasks });
+      
+      // If in cloud mode, trigger sync through background script
+      if (this.isCloudMode) {
+        await this.syncToCloud();
+      }
+      
+      // Notify main popup of changes
+      this.notifyMainPopup();
     } catch (error) {
-      console.log('Error saving tasks:', error);
+      console.log('Error saving tasks in content script:', error);
     }
   }
 
-  addTask() {
+  // Sync to cloud database (only in cloud mode)
+  async syncToCloud() {
+    try {
+      if (!this.isCloudMode) return;
+      
+      // Get all tasks for syncing
+      const allTasks = await this.getAllTasks();
+      
+      // Send message to background script to trigger cloud sync
+      const response = await chrome.runtime.sendMessage({ 
+        action: 'syncToCloud', 
+        tasks: allTasks 
+      });
+      
+      if (response && !response.success) {
+        console.warn('Cloud sync response:', response.message || response.error);
+      }
+    } catch (error) {
+      console.log('Error syncing to cloud from content script:', error);
+    }
+  }
+
+  // Get all tasks for today (not just the filtered ones)
+  async getAllTasks() {
+    try {
+      // Get all tasks from storage, not just the filtered ones
+      const result = await chrome.storage.local.get(['tasklyTasks']);
+      return result.tasklyTasks || [];
+    } catch (error) {
+      console.error('Error getting all tasks:', error);
+      return this.tasks;
+    }
+  }
+
+  // Notify the main popup of task changes
+  async notifyMainPopup() {
+    try {
+      // Send message to background script to update badge
+      await chrome.runtime.sendMessage({ action: 'tasksUpdated' });
+    } catch (error) {
+      // Ignore errors if background script isn't available
+    }
+  }
+
+  async addTask() {
     const input = this.popupContainer.querySelector('#taskInputPopup');
     const taskText = input.value.trim();
     
@@ -250,34 +368,114 @@ class TasklyFloatingIcon {
         dateCreated: new Date().toISOString()
       };
       
+      // Add to local array
       this.tasks.unshift(newTask);
-      this.saveTasks();
-      this.renderTasks();
-      input.value = '';
       
-      // Add animation to new task
-      setTimeout(() => {
-        const taskElement = this.popupContainer.querySelector(`[data-task-id="${newTask.id}"]`);
-        if (taskElement) {
-          taskElement.classList.add('task-added');
+      // Get all existing tasks and add the new one
+      try {
+        const result = await chrome.storage.local.get(['tasklyTasks']);
+        const allTasks = result.tasklyTasks || [];
+        allTasks.unshift(newTask);
+        
+        // Save updated tasks
+        await chrome.storage.local.set({ tasklyTasks: allTasks });
+        
+        // Also save to historical data
+        const today = new Date().toISOString().split('T')[0];
+        const historicalKey = `tasklyTasks_${today}`;
+        await chrome.storage.local.set({ [historicalKey]: allTasks });
+        
+        this.renderTasks();
+        input.value = '';
+        this.updateTaskCount();
+        
+        // If in cloud mode, trigger sync
+        if (this.isCloudMode) {
+          await this.syncToCloud();
         }
-      }, 50);
+        
+        // Notify main popup of changes
+        this.notifyMainPopup();
+        
+        // Add animation to new task
+        setTimeout(() => {
+          const taskElement = this.popupContainer.querySelector(`[data-task-id="${newTask.id}"]`);
+          if (taskElement) {
+            taskElement.classList.add('task-added');
+          }
+        }, 50);
+      } catch (error) {
+        console.error('Error adding task in content script:', error);
+      }
     }
   }
 
-  toggleTask(taskId) {
-    const task = this.tasks.find(t => t.id === taskId);
-    if (task) {
-      task.completed = !task.completed;
-      this.saveTasks();
+  async toggleTask(taskId) {
+    try {
+      // Update in local array
+      const task = this.tasks.find(t => t.id === taskId);
+      if (task) {
+        task.completed = !task.completed;
+      }
+      
+      // Update in storage
+      const result = await chrome.storage.local.get(['tasklyTasks']);
+      const allTasks = result.tasklyTasks || [];
+      const taskInStorage = allTasks.find(t => t.id === taskId);
+      if (taskInStorage) {
+        taskInStorage.completed = !taskInStorage.completed;
+        
+        await chrome.storage.local.set({ tasklyTasks: allTasks });
+        
+        // Also update historical data
+        const today = new Date().toISOString().split('T')[0];
+        const historicalKey = `tasklyTasks_${today}`;
+        await chrome.storage.local.set({ [historicalKey]: allTasks });
+        
+        this.renderTasks();
+        this.updateTaskCount();
+        
+        // If in cloud mode, trigger sync
+        if (this.isCloudMode) {
+          await this.syncToCloud();
+        }
+        
+        this.notifyMainPopup();
+      }
+    } catch (error) {
+      console.error('Error toggling task in content script:', error);
+    }
+  }
+
+  async deleteTask(taskId) {
+    try {
+      // Remove from local array
+      this.tasks = this.tasks.filter(t => t.id !== taskId);
+      
+      // Remove from storage
+      const result = await chrome.storage.local.get(['tasklyTasks']);
+      const allTasks = result.tasklyTasks || [];
+      const updatedTasks = allTasks.filter(t => t.id !== taskId);
+      
+      await chrome.storage.local.set({ tasklyTasks: updatedTasks });
+      
+      // Also update historical data
+      const today = new Date().toISOString().split('T')[0];
+      const historicalKey = `tasklyTasks_${today}`;
+      await chrome.storage.local.set({ [historicalKey]: updatedTasks });
+      
       this.renderTasks();
+      this.updateTaskCount();
+      
+      // If in cloud mode, trigger sync
+      if (this.isCloudMode) {
+        await this.syncToCloud();
+      }
+      
+      this.notifyMainPopup();
+    } catch (error) {
+      console.error('Error deleting task in content script:', error);
     }
-  }
-
-  deleteTask(taskId) {
-    this.tasks = this.tasks.filter(t => t.id !== taskId);
-    this.saveTasks();
-    this.renderTasks();
   }
 
   clearCompletedTasks() {

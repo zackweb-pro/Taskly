@@ -18,8 +18,58 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.tabs.create({
       url: chrome.runtime.getURL('popup.html')
     });
+  } else if (request.action === 'syncToCloud') {
+    // Handle cloud sync by forwarding to popup/extension pages
+    handleCloudSync(request.tasks)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // Keep the message channel open for async response
   }
 });
+
+// Handle cloud synchronization by queueing sync for popup
+async function handleCloudSync(tasks) {
+  try {
+    // Since we can't directly access popup in Manifest V3 service worker,
+    // we'll queue the sync and let the popup handle it when it's next opened
+    await chrome.storage.local.set({ 
+      pendingCloudSync: { 
+        tasks: tasks, 
+        timestamp: Date.now() 
+      } 
+    });
+
+    // Try to notify any open tabs with the extension popup
+    try {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.url && tab.url.includes('chrome-extension://')) {
+          // Send message to extension pages
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'processPendingSync',
+            tasks: tasks
+          }).catch(() => {
+            // Ignore errors - tab might not have content script
+          });
+        }
+      }
+    } catch (error) {
+      // Ignore tab messaging errors
+    }
+
+    return { 
+      success: true, 
+      message: 'Cloud sync queued - will complete when extension is next opened' 
+    };
+
+  } catch (error) {
+    console.error('Cloud sync failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
 
 // Optional: Badge text to show task count
 chrome.storage.onChanged.addListener((changes, namespace) => {

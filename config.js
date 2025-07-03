@@ -13,12 +13,16 @@ class Config {
     // In a Chrome extension, we can't directly access process.env
     // This is a placeholder for different environment handling strategies
     
-    // Option 1: Use chrome.storage for user-set credentials
-    // Option 2: Build-time replacement (using webpack or similar)
-    // Option 3: Fetch from a secure endpoint
+    // For development, use hardcoded values
+    // TODO: Replace these with your actual Supabase credentials
+    if (name === 'SUPABASE_URL') {
+      return 'https://mksxrwldbhknicbbmssz.supabase.co'; // Replace with your Supabase URL
+    }
+    if (name === 'SUPABASE_ANON_KEY') {
+      return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rc3hyd2xkYmhrbmljYmJtc3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU4Mzg4ODAsImV4cCI6MjA1MTQxNDg4MH0.hhLPznLBeSXdhaBWqQJMf0I4YKG4k8E3-TP6cXfxhXQ'; // Replace with your Supabase anon key
+    }
     
-    // For now, return the default value
-    // TODO: Implement secure credential management
+    // For production builds, use the placeholder values that get replaced
     return defaultValue;
   }
 
